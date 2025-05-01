@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Capture Dynamic - {{ name }}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 10px;
+            background-color: #f0f0f0;
+        }
+        h1 {
+            text-align: center;
+            margin: 10px 0;
+        }
+        .instructions {
+            text-align: center;
+            margin: 10px 0;
+            padding: 8px;
+            background-color: #fff;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        .camera-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 5px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .camera-container {
+            position: relative;
+            background-color: #000;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        .camera-container img {
+            width: 100%;
+            height: auto;
+            display: block;
+            max-height: 400px;
+        }
+        .buttons {
+            text-align: center;
+            margin-top: 10px;
+        }
+        .buttons button {
+            padding: 10px 20px;
+            margin: 0 10px;
+            background-color: #333;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .buttons button:hover {
+            background-color: #555;
+        }
+    </style>
+</head>
+<body>
+    <h1>Capture Dynamic - {{ name }}</h1>
+    <div class="instructions">
+        Please ensure the staff member moves around to capture multiple angles. Click "Capture" to start dynamic capturing, or "Cancel" to return to the home page.
+    </div>
+    <div class="camera-grid">
+        {% for i in camera_indices %}
+            <div class="camera-container">
+                <img src="{{ url_for('video_feed', camera_id=i) }}" alt="Camera {{ i }}">
+            </div>
+        {% endfor %}
+        {% if camera_indices|length < 4 %}
+            {% for _ in range(4 - camera_indices|length) %}
+                <div class="camera-container" style="background-color: #666;"></div>
+            {% endfor %}
+        {% endif %}
+    </div>
+    <div class="buttons">
+        <button onclick="startDynamicCapture()">Capture</button>
+        <button onclick="cancelCapture()">Cancel</button>
+    </div>
+
+    <script>
+        function stopStreams() {
+            const images = document.querySelectorAll('.camera-grid img');
+            images.forEach(img => {
+                img.src = ''; // Stop the stream by clearing the src
+            });
+        }
+
+        function startDynamicCapture() {
+            fetch('/add_person', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: 'dynamic',
+                    name: '{{ name }}',
+                    cameras: {{ camera_indices | tojson }}
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.message); // "Started dynamic addition for {name}"
+                stopStreams();
+                setTimeout(() => { window.location.href = '/'; }, 100);
+            })
+            .catch(error => {
+                console.error('Error starting dynamic capture:', error);
+                alert('Failed to start dynamic capture due to a server error.');
+            });
+        }
+
+        function cancelCapture() {
+            stopStreams();
+            setTimeout(() => { window.location.href = '/'; }, 100);
+        }
+    </script>
+</body>
+</html>

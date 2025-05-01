@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Capture Dynamic - {{ name }}</title>
+    <style>
+        :root {
+            --grid-top-margin: 40px; /* Configurable margin above camera grid */
+        }
+        body { 
+            font-family: Arial, sans-serif; 
+            background-image: url('/static/bg10.jpg'); /* Path to your image */
+            background-size: cover; /* Scales the image to cover the entire background */
+            background-position: center; /* Centers the image */
+            background-repeat: no-repeat; /* Prevents tiling of the image */
+            background-attachment: fixed;
+            margin: 0; 
+            padding: 20px; 
+        }
+        h1 {
+            text-align: center;
+            margin: 10px 0;
+        }
+        .instructions {
+            text-align: center;
+            margin: 10px 0 20px 0; /* Added bottom margin */
+            padding: 15px; /* Increased from 8px */
+            background-color: #fff;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            width: calc(100% - 40px); /* Full width minus body padding */
+        }
+        .camera-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px; /* Increased from 5px */
+            max-width: 1400px; /* Increased from 1200px for larger containers */
+            width: 100%;
+            margin: 0 auto;
+            margin-top: var(--grid-top-margin); /* Configurable top margin */
+        }
+        .camera-container {
+            position: relative;
+            background-color: #000;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        .camera-title {
+            text-align: center;
+            padding: 8px;
+            background-color: #333;
+            color: white;
+            margin: 0;
+            border-radius: 5px 5px 0 0;
+        }
+        .camera-ip {
+            font-size: 0.8em;
+            color: #ccc;
+            margin-left: 10px;
+        }
+        .camera-container img {
+            width: 100%;
+            height: auto;
+            display: block;
+            max-height: 600px; /* Increased from 400px for larger containers */
+        }
+        .buttons {
+            text-align: center;
+            margin-top: 20px; /* Increased from 10px */
+        }
+        .buttons button {
+            padding: 10px 20px;
+            margin: 0 10px;
+            background-color: #333;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .buttons button:hover {
+            background-color: #555;
+        }
+        .progress-container {
+            width: 50%;
+            margin: 20px auto;
+            text-align: center;
+            display: none;
+        }
+        .progress-bar {
+            width: 100%;
+            background-color: #ddd;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        .progress {
+            width: 0%;
+            height: 20px;
+            background-color: #4CAF50;
+            text-align: center;
+            line-height: 20px;
+            color: white;
+            transition: width 0.3s ease;
+        }
+        .progress-text {
+            margin-top: 5px;
+            font-size: 14px;
+        }
+        .custom-dialog {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.3);
+            z-index: 1000;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+        }
+        .custom-dialog-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 999;
+        }
+        .custom-dialog button {
+            padding: 10px 20px;
+            margin: 10px 5px;
+            background-color: #333;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .custom-dialog button:hover {
+            background-color: #555;
+        }
+    </style>
+</head>
+<body>
+    <h1>Capture Dynamic - {{ name }}</h1>
+
+    <div class="instructions">
+        Please ensure the staff member rotates or turns around to capture multiple angles.<br>
+        Click "Capture" to start dynamic capturing, or "Cancel" to return to the home page.
+    </div>
+
+    <div class="camera-grid">
+        {% for i in camera_indices %}
+            <div class="camera-container">
+                <div class="camera-title">
+                    Camera {{ i }} <span class="camera-ip">({{ camera_data[i]['ip'] }})</span>
+                </div>
+                <img src="{{ url_for('video_feed', camera_id=i) }}" alt="Camera {{ i }}">
+            </div>
+        {% endfor %}
+        {% if camera_indices|length < 4 %}
+            {% for _ in range(4 - camera_indices|length) %}
+                <div class="camera-container" style="background-color: #666;"></div>
+            {% endfor %}
+        {% endif %}
+    </div>
+
+    <div class="progress-container" id="progress-container">
+        <div class="progress-bar">
+            <div class="progress" id="progress"></div>
+        </div>
+        <div class="progress-text" id="progress-text">0/28 images captured</div>
+    </div>
+
+    <div class="buttons">
+        <button onclick="startDynamicCapture()">Capture</button>
+        <button onclick="cancelCapture()">Cancel</button>
+    </div>
+
+    <script>
+        const THRESHOLD = 28;
+
+        function stopStreams() {
+            const images = document.querySelectorAll('.camera-grid img');
+            images.forEach(img => {
+                img.src = '';
+            });
+        }
+
+        function showCompletionDialog() {
+            console.log('Showing completion dialog');
+            const overlay = document.createElement('div');
+            overlay.className = 'custom-dialog-overlay';
+            document.body.appendChild(overlay);
+
+            const dialog = document.createElement('div');
+            dialog.className = 'custom-dialog';
+            dialog.innerHTML = `
+                <p>Dynamic capturing of the staff member has been completed.</p>
+                <div>
+                    <button onclick="exitToHome()">OK</button>
+                </div>
+            `;
+            document.body.appendChild(dialog);
+        }
+
+        function exitToHome() {
+            console.log('Exiting to home');
+            stopStreams();
+            setTimeout(() => { window.location.href = '/'; }, 100);
+            removeDialog();
+        }
+
+        function removeDialog() {
+            const dialog = document.querySelector('.custom-dialog');
+            const overlay = document.querySelector('.custom-dialog-overlay');
+            if (dialog) document.body.removeChild(dialog);
+            if (overlay) document.body.removeChild(overlay);
+        }
+
+        function updateProgressBar(cropCount, isActive) {
+            console.log(`Updating progress: ${cropCount}/${THRESHOLD}, isActive: ${isActive}`);
+            const progress = document.getElementById('progress');
+            const progressText = document.getElementById('progress-text');
+            const percentage = (cropCount / THRESHOLD) * 100;
+            progress.style.width = `${Math.min(percentage, 100)}%`;
+            progressText.textContent = `${cropCount}/${THRESHOLD} images captured`;
+
+            if (!isActive) {
+                console.log('Capture complete, triggering dialog');
+                setTimeout(() => {
+                    stopStreams();
+                    showCompletionDialog();
+                }, 500);
+            } else {
+                setTimeout(checkDynamicProgress, 500);
+            }
+        }
+
+        function checkDynamicProgress() {
+            fetch('/get_dynamic_crop_count')
+                .then(response => response.json())
+                .then(data => {
+                    updateProgressBar(data.crop_count, data.is_active);
+                })
+                .catch(error => {
+                    console.error('Error fetching crop count:', error);
+                });
+        }
+
+        function startDynamicCapture() {
+            const progressContainer = document.getElementById('progress-container');
+            progressContainer.style.display = 'block';
+
+            fetch('/add_person', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: 'dynamic',
+                    name: '{{ name }}',
+                    cameras: {{ camera_indices | tojson }},
+                    threshold: THRESHOLD
+                })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to start dynamic capture');
+                }
+                // No need to parse JSON since 204 has no content
+                checkDynamicProgress(); // Start polling immediately
+                setTimeout(() => {
+                    fetch('/get_dynamic_crop_count')
+                        .then(res => res.json())
+                        .then(data => {
+                            if (!data.is_active && !document.querySelector('.custom-dialog')) {
+                                stopStreams();
+                                showCompletionDialog();
+                            }
+                        });
+                }, 15000); // Fallback timeout
+            })
+            .catch(error => {
+                console.error('Error starting dynamic capture:', error);
+                alert('Failed to start dynamic capture due to a server error.');
+                progressContainer.style.display = 'none';
+            });
+        }
+
+        function cancelCapture() {
+            stopStreams();
+            setTimeout(() => { window.location.href = '/'; }, 100);
+            document.getElementById('progress-container').style.display = 'none';
+        }
+
+    </script>
+</body>
+</html>

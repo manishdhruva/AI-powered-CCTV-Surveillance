@@ -1,0 +1,1694 @@
+<!-- <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI SmartVision</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            background-image: url('/static/bg10.jpg');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+            margin: 0; 
+            padding: 20px; 
+        }
+        h1 { 
+            text-align: center; 
+            color: #333; 
+        }
+        .top-right-controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        .controls { 
+            text-align: center; 
+            margin-bottom: 20px;
+        }
+        .toggle-view-btn, .database-btn { 
+            padding: 10px 20px; 
+            background-color: #333; 
+            color: white; 
+            border: none; 
+            border-radius: 5px; 
+            cursor: pointer; 
+            margin: 0 10px;
+        }
+        .toggle-view-btn:hover, .database-btn:hover { 
+            background-color: #555; 
+        }
+        .dropdown { 
+            position: relative; 
+            display: inline-block; 
+        }
+        .dropdown-content { 
+            display: none; 
+            position: absolute; 
+            background-color: #f9f9f9; 
+            min-width: 160px; 
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2); 
+            z-index: 1; 
+            border-radius: 5px;
+            left: 0;
+        }
+        .dropdown-content a, .nested-dropdown span { 
+            color: black; 
+            padding: 12px 16px; 
+            text-decoration: none; 
+            display: block; 
+            cursor: pointer;
+        }
+        .dropdown-content a:hover, .nested-dropdown span:hover { 
+            background-color: #f1f1f1; 
+        }
+        .dropdown:hover .dropdown-content { 
+            display: block; 
+        }
+        .nested-dropdown { 
+            position: relative; 
+        }
+        .nested-content { 
+            display: none; 
+            position: absolute; 
+            background-color: #f9f9f9; 
+            min-width: 160px; 
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2); 
+            z-index: 1; 
+            border-radius: 5px;
+            left: 100%;
+            top: 0;
+        }
+        .nested-dropdown:hover .nested-content { 
+            display: block; 
+        }
+        .camera-grid { 
+            display: grid; 
+            gap: 20px; 
+            padding: 20px; 
+            margin: 0 auto; 
+            transition: all 0.3s ease;
+            max-width: 100%; /* Prevent overflow */
+        }
+        .camera-grid.separate { 
+            grid-template-columns: repeat(2, 1fr); 
+            max-width: 2040px;
+            margin-top: 90px;
+        }
+        .camera-grid.single { 
+            grid-template-columns: repeat(3, 1fr); 
+            max-width: 1860px;
+            margin-bottom: 40px; /* Space below grid in single view */
+        }
+        .camera-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .camera-title { 
+            text-align: center; 
+            padding: 10px; 
+            background-color: #333; 
+            color: white; 
+            margin: 0 0 5px 0; 
+            box-sizing: border-box;
+            border-radius: 5px 5px 0 0;
+            width: 100%; /* Responsive width */
+            max-width: 1000px; /* Cap for larger screens */
+        }
+        .camera-feed { 
+            border: 2px solid #333; 
+            border-radius: 0 0 5px 5px; 
+            overflow: hidden; 
+            background-color: #000; 
+            position: relative; 
+            box-sizing: border-box; 
+            transition: all 0.3s ease;
+            width: 100%; /* Responsive width */
+            max-width: 1000px; /* Cap for larger screens */
+        }
+        .camera-feed.separate {
+            height: 100%; /* Fixed height */
+            width: 100%; 
+        }
+        .camera-feed.separate img { 
+            width: 100%; 
+            height: 100%; /* Fill container */
+            object-fit: cover; /* Crop to fill */
+        }
+        .camera-feed.single {
+            height: 100%; /* Fixed height */
+            width: 100%; 
+        }
+        .camera-feed.single img { 
+            width: 100%; 
+            height: 100%; /* Fill container */
+            object-fit: cover; /* Crop to fill */
+        }
+        .draw-roi-btn, .remove-roi-btn { 
+            position: absolute; 
+            bottom: 10px; 
+            padding: 5px 10px; 
+            background-color: #333; 
+            color: white; 
+            border: none; 
+            border-radius: 3px; 
+            cursor: pointer; 
+        }
+        .draw-roi-btn { 
+            left: 10px; 
+        }
+        .remove-roi-btn { 
+            left: 100px; 
+        }
+        .draw-roi-btn:hover, .remove-roi-btn:hover { 
+            background-color: #555; 
+        }
+        .pagination { 
+            text-align: center; 
+            margin-top: 20px; 
+            margin-bottom: 20px; 
+            display: none; 
+        }
+        .pagination.active { 
+            display: block; 
+        }
+        .pagination a { 
+            padding: 10px 20px; 
+            margin: 0 10px; 
+            background-color: #333; 
+            color: white; 
+            text-decoration: none; 
+            border-radius: 5px; 
+        }
+        .pagination a:hover { 
+            background-color: #555; 
+        }
+        .pagination a.disabled { 
+            background-color: #ccc; 
+            cursor: not-allowed; 
+        }
+        .logout-btn {
+            padding: 10px 20px;
+            background-color: #333;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .logout-btn:hover {
+            background-color: #555;
+        }
+        canvas { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            display: none; 
+        }
+        .camera-feed.separate canvas { 
+            width: 100%; 
+            max-height: 563px; 
+        }
+        .camera-feed.single canvas { 
+            width: 100%; 
+            max-height: 338px; 
+            display: none !important; 
+        }
+        .custom-dialog {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.3);
+            z-index: 1000;
+            max-width: 400px;
+            width: 90%;
+        }
+        .custom-dialog-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 999;
+        }
+        .camera-list {
+            max-height: 150px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            margin: 10px 0;
+            padding: 5px;
+        }
+        .camera-option {
+            padding: 5px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .camera-option.selected {
+            background-color: #e0e0e0;
+        }
+        .camera-option.disabled {
+            color: #888;
+            cursor: not-allowed;
+        }
+        .tick {
+            color: green;
+            font-weight: bold;
+        }
+        .custom-dialog button {
+            padding: 5px 15px;
+            margin: 5px;
+            background-color: #333;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .custom-dialog button:hover {
+            background-color: #555;
+        }
+        .checkbox-container {
+            margin: 10px 0;
+        }
+        .refresh-btn {
+            padding: 10px 20px;
+            background-color: #333;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .refresh-btn:hover {
+            background-color: #555;
+        }
+        .camera-ip {
+            font-size: 0.8em;
+            color: #ccc;
+            margin-left: 10px;
+        }
+
+        /* Media Queries for Mobile Responsiveness */
+        @media (max-width: 768px) {
+            .camera-grid.separate {
+                grid-template-columns: 1fr; /* Single column on mobile */
+            }
+            .camera-grid.single {
+                grid-template-columns: 1fr; /* Single column on mobile */
+            }
+            .camera-title {
+                max-width: 100%; /* Full width on mobile */
+            }
+            .camera-feed {
+                max-width: 100%; /* Full width on mobile */
+            }
+            .refresh-btn {
+                top: 10px;
+                right: 10px;
+                padding: 5px 10px; /* Smaller button */
+            }
+            .dropdown-content, .nested-content {
+                min-width: 100px; /* Smaller dropdowns */
+                left: 0; /* Prevent overflow */
+            }
+            .nested-content {
+                left: 0;
+                top: 100%; /* Stack below parent */
+            }
+            .controls button, .pagination a, .logout a {
+                display: inline-block;
+                margin: 5px;
+                padding: 8px 16px; /* Smaller buttons */
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>AI SmartVision</h1>
+
+    <div class="top-right-controls">
+        <button class="refresh-btn" onclick="refreshStreams()">🔂 Refresh</button>
+        <a href="{{ url_for('logout') }}" class="logout-btn">Logout</a>
+    </div>
+
+    <div class="controls">
+        <button class="toggle-view-btn" onclick="toggleView()">Toggle View</button>
+        {% if view_mode == 'separate' %}
+            <div class="dropdown">
+                <button class="database-btn">Database</button>
+                <div class="dropdown-content">
+                    <div class="nested-dropdown">
+                        <span>Add Staff</span>
+                        <div class="nested-content">
+                            <a href="#" onclick="addPerson('static')">Static (NEW)</a>
+                            <a href="#" onclick="addPerson('dynamic')">Dynamic (EXISTING)</a>
+                        </div>
+                    </div>
+                    <div class="nested-dropdown">
+                        <span>Remove Staff</span>
+                        <div class="nested-content" id="remove-person-list">
+                            {% if persons|length == 0 %}
+                                <span>No persons in database</span>
+                            {% else %}
+                                {% for person in persons %}
+                                    <a href="#" onclick="removePerson('{{ person }}')">{{ person }}</a>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+                    </div>
+                    <a href="#" onclick="clearDatabase()">Clear Database</a>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+
+    <div class="camera-grid {{ 'single' if view_mode == 'single' else 'separate' }}">
+        {% for i in camera_indices %}
+        <div class="camera-container">
+            <h3 class="camera-title {{ 'single' if view_mode == 'single' else 'separate' }}">
+                Camera {{ i }} <span class="camera-ip">({{ camera_data[i]['ip'] }})</span>
+            </h3>
+            <div class="camera-feed {{ 'single' if view_mode == 'single' else 'separate' }}" data-camera-id="{{ i }}">
+                <img src="{{ url_for('video_feed', camera_id=i, view=view_mode) }}" alt="Camera {{ i }} Feed">
+                {% if view_mode == 'separate' %}
+                    <button class="draw-roi-btn" onclick="startDrawingROI('{{ i }}')">Draw ROI</button>
+                    <button class="remove-roi-btn" onclick="removeROI('{{ i }}')">Clear ROI</button>
+                {% endif %}
+                <canvas id="canvas-{{ i }}"></canvas>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="pagination {{ 'active' if total_pages > 1 else '' }}">
+        {% if current_page > 1 %}
+            <a href="{{ url_for('index', page=current_page-1, view=view_mode) }}" onclick="stopStreams(event)">Previous</a>
+        {% else %}
+            <a href="#" class="disabled">Previous</a>
+        {% endif %}
+        <span>Page {{ current_page }} of {{ total_pages }}</span>
+        {% if current_page < total_pages %}
+            <a href="{{ url_for('index', page=current_page+1, view=view_mode) }}" onclick="stopStreams(event)">Next</a>
+        {% else %}
+            <a href="#" class="disabled">Next</a>
+        {% endif %}
+    </div>
+
+    <script>
+        let drawing = false;
+        let points = [];
+        let currentCameraId = null;
+        let initialFrame = null;
+        let defaultCamerasList = [2,3,4,5];
+        const currentView = '{{ view_mode | safe }}';
+        const currentPage = {{ current_page | default(1) | safe }};
+        const activeCameras = {{ active_cameras | tojson | safe }};
+
+        // UI functions
+        function toggleView() {
+            stopStreams(null);
+            const newView = currentView === 'separate' ? 'single' : 'separate';
+            console.log('Current View:', currentView, 'New View:', newView, 'Current Page:', currentPage);
+            const url = newView === 'single' ? '/?view=single' : `/${currentPage}?view=separate`;
+            console.log('Redirecting to:', url);
+            window.location.href = url;
+        }
+
+        function refreshStreams() {
+            console.log('Refreshing all camera streams...');
+            stopStreams(null);
+            fetch('/refresh_cameras', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Refresh response:', data.message);
+                const images = document.querySelectorAll('.camera-feed img');
+                images.forEach(img => {
+                    const cameraId = img.closest('.camera-feed').dataset.cameraId;
+                    img.src = `/video_feed/${cameraId}?view=${currentView}&t=${new Date().getTime()}`;
+                });
+            })
+            .catch(error => {
+                console.error('Error refreshing cameras:', error);
+                alert('Failed to refresh camera streams. Please try again.');
+                const images = document.querySelectorAll('.camera-feed img');
+                images.forEach(img => {
+                    const cameraId = img.closest('.camera-feed').dataset.cameraId;
+                    img.src = `/video_feed/${cameraId}?view=${currentView}&t=${new Date().getTime()}`;
+                });
+            });
+        }
+
+        function stopStreams(event) {
+            if (event) event.preventDefault();
+            const images = document.querySelectorAll('.camera-feed img');
+            images.forEach(img => { img.src = ''; });
+            if (event) {
+                setTimeout(() => { window.location.href = event.target.href; }, 100);
+            }
+        }
+
+        function startDrawingROI(cameraId) {
+            if (currentView !== 'separate') return;
+            currentCameraId = cameraId;
+            const canvas = document.getElementById(`canvas-${cameraId}`);
+            const ctx = canvas.getContext('2d');
+            const img = document.querySelector(`.camera-feed[data-camera-id="${cameraId}"] img`);
+            const feed = document.querySelector(`.camera-feed[data-camera-id="${cameraId}"]`);
+
+            img.style.display = 'none';
+            canvas.style.display = 'block';
+            feed.querySelector('.draw-roi-btn').style.display = 'none';
+            feed.querySelector('.remove-roi-btn').style.display = 'none';
+
+            fetch(`/get_initial_frame/${cameraId}`)
+                .then(response => response.blob())
+                .then(blob => {
+                    const imgUrl = URL.createObjectURL(blob);
+                    initialFrame = new Image();
+                    initialFrame.onload = () => {
+                        canvas.width = feed.clientWidth; // Match responsive width
+                        canvas.height = feed.clientHeight;
+                        ctx.drawImage(initialFrame, 0, 0, canvas.width, canvas.height);
+                        drawing = true;
+                    };
+                    initialFrame.src = imgUrl;
+                })
+                .catch(error => console.error('Error fetching initial frame:', error));
+        }
+
+        function removeROI(cameraId) {
+            if (confirm(`Are you sure you want to remove the ROI for Camera ${cameraId}?`)) {
+                fetch(`/remove_roi/${cameraId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log(`ROI removed for Camera ${cameraId}:`, data);
+                    points = [];
+                    const img = document.querySelector(`.camera-feed[data-camera-id="${cameraId}"] img`);
+                    img.src = `/video_feed/${cameraId}?view=${currentView}&t=${new Date().getTime()}`;
+                })
+                .catch(error => {
+                    console.error('Error removing ROI:', error);
+                    alert('Failed to remove ROI. Please try again.');
+                });
+            }
+        }
+
+        document.querySelectorAll('canvas').forEach(canvas => {
+            canvas.onmousedown = (e) => {
+                if (!drawing || e.button !== 0) return;
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                points.push([x, y]);
+                drawROI(canvas.getContext('2d'), canvas);
+            };
+
+            canvas.oncontextmenu = (e) => {
+                e.preventDefault();
+                if (drawing && points.length > 2) {
+                    drawing = false;
+                    drawROI(canvas.getContext('2d'), canvas, true);
+                    saveROI(currentCameraId);
+                    resetDrawing(currentCameraId);
+                }
+            };
+        });
+
+        function drawROI(ctx, canvas, close = false) {
+            if (!initialFrame) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(initialFrame, 0, 0, canvas.width, canvas.height);
+            
+            ctx.beginPath();
+            ctx.strokeStyle = 'yellow';
+            ctx.lineWidth = 2;
+            for (let i = 0; i < points.length; i++) {
+                const [x, y] = points[i];
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            if (close) ctx.closePath();
+            ctx.stroke();
+
+            ctx.fillStyle = 'red';
+            points.forEach(([x, y]) => {
+                ctx.beginPath();
+                ctx.arc(x, y, 5, 0, 2 * Math.PI);
+                ctx.fill();
+            });
+        }
+
+        function saveROI(cameraId) {
+            const canvas = document.getElementById(`canvas-${cameraId}`);
+            const canvasWidth = canvas.width;
+            const canvasHeight = canvas.height;
+            const nativeWidth = 1280;
+            const nativeHeight = 720;
+            const scaleX = nativeWidth / canvasWidth;
+            const scaleY = nativeHeight / canvasHeight;
+            const scaledPoints = points.map(([x, y]) => [
+                Math.round(x * scaleX),
+                Math.round(y * scaleY)
+            ]);
+
+            fetch(`/save_roi/${cameraId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ roi: scaledPoints })
+            })
+                .then(response => response.json())
+                .then(data => console.log(`Scaled ROI for Camera ${cameraId}:`, scaledPoints))
+                .catch(error => console.error('Error saving ROI:', error));
+        }
+
+        function resetDrawing(cameraId) {
+            const canvas = document.getElementById(`canvas-${cameraId}`);
+            const img = document.querySelector(`.camera-feed[data-camera-id="${cameraId}"] img`);
+            const drawBtn = document.querySelector(`.camera-feed[data-camera-id="${cameraId}"] .draw-roi-btn`);
+            const removeBtn = document.querySelector(`.camera-feed[data-camera-id="${cameraId}"] .remove-roi-btn`);
+            canvas.style.display = 'none';
+            img.style.display = 'block';
+            if (drawBtn) drawBtn.style.display = 'block';
+            if (removeBtn) removeBtn.style.display = 'block';
+            initialFrame = null;
+        }
+
+        // Database functions
+        function addPerson(type) {
+            if (type === 'static') {
+                const overlay = document.createElement('div');
+                overlay.className = 'custom-dialog-overlay';
+                document.body.appendChild(overlay);
+
+                const dialog = document.createElement('div');
+                dialog.className = 'custom-dialog';
+                dialog.innerHTML = `
+                    <p>Please enter a name and select cameras for static capture:</p>
+                    <label for="static-name">Name:</label>
+                    <input type="text" id="static-name" placeholder="Enter name" style="width: 100%; padding: 5px; margin-bottom: 10px;">
+                    <div class="camera-list" id="camera-list">
+                        ${activeCameras.map(i => `
+                            <div class="camera-option" data-camera-id="${i}" onclick="toggleCameraSelection(this)">
+                                Camera ${i} <span class="tick" style="display: none;">✔</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="checkbox-container">
+                        <label><input type="checkbox" id="use-defaults" onclick="toggleDefaults(this)"> Use Defaults</label>
+                    </div>
+                    <div>
+                        <button onclick="continueStaticAdd(this)">Continue</button>
+                        <button onclick="cancelDialog(this)">Cancel</button>
+                    </div>
+                `;
+                document.body.appendChild(dialog);
+            } else if (type === 'dynamic') {
+                const overlay = document.createElement('div');
+                overlay.className = 'custom-dialog-overlay';
+                document.body.appendChild(overlay);
+
+                const dialog = document.createElement('div');
+                dialog.className = 'custom-dialog';
+                dialog.innerHTML = `
+                    <p>Please enter an existing name and select cameras for dynamic capture:</p>
+                    <label for="dynamic-name">Name:</label>
+                    <input type="text" id="dynamic-name" placeholder="Enter existing name" style="width: 100%; padding: 5px; margin-bottom: 10px;">
+                    <div class="camera-list" id="camera-list">
+                        ${activeCameras.map(i => `
+                            <div class="camera-option" data-camera-id="${i}" onclick="toggleCameraSelection(this)">
+                                Camera ${i} <span class="tick" style="display: none;">✔</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="checkbox-container">
+                        <label><input type="checkbox" id="use-defaults" onclick="toggleDefaults(this)"> Use Defaults</label>
+                    </div>
+                    <div>
+                        <button onclick="continueDynamicAdd(this)">Continue</button>
+                        <button onclick="cancelDialog(this)">Cancel</button>
+                    </div>
+                `;
+                document.body.appendChild(dialog);
+            }
+        }
+
+        function toggleCameraSelection(option) {
+            if (option.classList.contains('disabled')) return;
+            const isSelected = option.classList.contains('selected');
+            option.classList.toggle('selected', !isSelected);
+            const tick = option.querySelector('.tick');
+            tick.style.display = isSelected ? 'none' : 'inline';
+        }
+
+        function toggleDefaults(checkbox) {
+            const cameraList = document.getElementById('camera-list');
+            const options = cameraList.getElementsByClassName('camera-option');
+            const defaultCameras = defaultCamerasList;
+
+            if (checkbox.checked) {
+                Array.from(options).forEach(option => {
+                    const cameraId = parseInt(option.dataset.cameraId);
+                    option.classList.toggle('selected', defaultCameras.includes(cameraId));
+                    option.classList.add('disabled');
+                    const tick = option.querySelector('.tick');
+                    tick.style.display = defaultCameras.includes(cameraId) ? 'inline' : 'none';
+                });
+            } else {
+                Array.from(options).forEach(option => {
+                    option.classList.remove('selected');
+                    option.classList.remove('disabled');
+                    const tick = option.querySelector('.tick');
+                    tick.style.display = 'none';
+                });
+            }
+        }
+
+        function continueStaticAdd(button) {
+            const dialog = button.closest('.custom-dialog');
+            const name = dialog.querySelector('#static-name').value.trim();
+            if (!name) {
+                alert('Please enter a name.');
+                return;
+            }
+
+            const useDefaults = dialog.querySelector('#use-defaults').checked;
+            const defaultCameras = defaultCamerasList;
+            let selectedCameras;
+
+            if (useDefaults) {
+                selectedCameras = defaultCameras;
+            } else {
+                const options = dialog.querySelectorAll('.camera-option.selected');
+                selectedCameras = Array.from(options).map(option => parseInt(option.dataset.cameraId));
+                if (selectedCameras.length === 0) {
+                    alert('Please select at least one camera.');
+                    return;
+                }
+            }
+
+            const cameraParam = selectedCameras.slice(0, 4).join(',');
+            window.location.href = `/capture_static?name=${encodeURIComponent(name)}&cameras=${cameraParam}`;
+            cancelDialog(button);
+        }
+
+        function continueDynamicAdd(button) {
+            const dialog = button.closest('.custom-dialog');
+            const name = dialog.querySelector('#dynamic-name').value.trim();
+            if (!name) {
+                alert('Please enter a name.');
+                return;
+            }
+
+            const useDefaults = dialog.querySelector('#use-defaults').checked;
+            const defaultCameras = defaultCamerasList;
+            let selectedCameras;
+
+            if (useDefaults) {
+                selectedCameras = defaultCameras;
+            } else {
+                const options = dialog.querySelectorAll('.camera-option.selected');
+                selectedCameras = Array.from(options).map(option => parseInt(option.dataset.cameraId));
+                if (selectedCameras.length === 0) {
+                    alert('Please select at least one camera.');
+                    return;
+                }
+            }
+
+            fetch('/check_person_and_redirect', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: name,
+                    cameras: selectedCameras
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.redirect) {
+                    window.location.href = data.redirect;
+                } else {
+                    alert(data.message);
+                }
+                cancelDialog(button);
+            })
+            .catch(error => {
+                console.error('Error checking person:', error);
+                alert('An error occurred while checking the person.');
+                cancelDialog(button);
+            });
+        }
+
+        function cancelDialog(button) {
+            const dialog = button.closest('.custom-dialog');
+            const overlay = document.querySelector('.custom-dialog-overlay');
+            if (dialog) document.body.removeChild(dialog);
+            if (overlay) document.body.removeChild(overlay);
+        }
+
+        function updatePersonList(name) {
+            const list = document.getElementById('remove-person-list');
+            if (list.children[0].tagName === 'SPAN') list.innerHTML = '';
+            const a = document.createElement('a');
+            a.href = '#';
+            a.textContent = name;
+            a.onclick = () => removePerson(name);
+            list.appendChild(a);
+        }
+
+        function removePerson(name) {
+            if (confirm(`Are you sure you want to remove ${name}?`)) {
+                const list = document.getElementById('remove-person-list');
+                const personLinks = list.getElementsByTagName('a');
+                let removedElement = null;
+                for (let i = 0; i < personLinks.length; i++) {
+                    if (personLinks[i].textContent === name) {
+                        removedElement = personLinks[i];
+                        list.removeChild(removedElement);
+                        break;
+                    }
+                }
+                if (list.children.length === 0) {
+                    list.innerHTML = '<span>No persons in database</span>';
+                }
+                fetch('/remove_person', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name })
+                })
+                .then(response => response.json())
+                .then(data => {})
+                .catch(error => {
+                    console.error('Error removing person:', error);
+                    alert('Failed to remove person from server');
+                    if (removedElement) {
+                        list.appendChild(removedElement);
+                        if (list.children[0].tagName === 'SPAN') {
+                            list.removeChild(list.children[0]);
+                        }
+                    }
+                });
+            }
+        }
+
+        function clearDatabase() {
+            if (confirm('Are you sure you want to clear the entire database?')) {
+                const list = document.getElementById('remove-person-list');
+                let originalContent = list.innerHTML;
+                list.innerHTML = '<span>No persons in database</span>';
+                fetch('/clear_database', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                })
+                .then(response => response.json())
+                .then(data => {})
+                .catch(error => {
+                    console.error('Error clearing database:', error);
+                    alert('Failed to clear database on server');
+                    list.innerHTML = originalContent;
+                });
+            }
+        }
+    </script>
+</body>
+</html> -->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI SmartVision</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            background-image: url('/static/bg10.jpg');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+            margin: 0; 
+            padding: 20px; 
+        }
+        h1 { 
+            text-align: center; 
+            color: #333; 
+        }
+        .top-controls {
+            position: absolute;
+            top: 20px;
+            display: flex;
+            justify-content: space-between;
+            width: calc(100% - 40px);
+            padding: 0 20px;
+            box-sizing: border-box;
+        }
+        .top-left-controls, .top-right-controls {
+            display: flex;
+            gap: 10px;
+        }
+        .controls { 
+            text-align: center; 
+            margin-bottom: 20px;
+        }
+        .toggle-view-btn, .database-btn, .recordings-btn { 
+            padding: 10px 20px; 
+            background-color: #333; 
+            color: white; 
+            border: none; 
+            border-radius: 5px; 
+            cursor: pointer; 
+            margin: 0 10px;
+            text-decoration: none;
+        }
+        .toggle-view-btn:hover, .database-btn:hover, .recordings-btn:hover { 
+            background-color: #555; 
+        }
+        .dropdown { 
+            position: relative; 
+            display: inline-block; 
+        }
+        .dropdown-content { 
+            display: none; 
+            position: absolute; 
+            background-color: #f9f9f9; 
+            min-width: 160px; 
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2); 
+            z-index: 1; 
+            border-radius: 5px;
+            left: 0;
+        }
+        .dropdown-content a, .nested-dropdown span { 
+            color: black; 
+            padding: 12px 16px; 
+            text-decoration: none; 
+            display: block; 
+            cursor: pointer;
+        }
+        .dropdown-content a:hover, .nested-dropdown span:hover { 
+            background-color: #f1f1f1; 
+        }
+        .dropdown:hover .dropdown-content { 
+            display: block; 
+        }
+        .nested-dropdown { 
+            position: relative; 
+        }
+        .nested-content { 
+            display: none; 
+            position: absolute; 
+            background-color: #f9f9f9; 
+            min-width: 160px; 
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2); 
+            z-index: 1; 
+            border-radius: 5px;
+            left: 100%;
+            top: 0;
+        }
+        .nested-dropdown:hover .nested-content { 
+            display: block; 
+        }
+        .camera-grid { 
+            display: grid; 
+            gap: 20px; 
+            padding: 20px; 
+            margin: 0 auto; 
+            transition: all 0.3s ease;
+            max-width: 100%;
+        }
+        .camera-grid.separate { 
+            grid-template-columns: repeat(2, 1fr); 
+            max-width: 2040px;
+            margin-top: 90px;
+        }
+        .camera-grid.single { 
+            grid-template-columns: repeat(3, 1fr); 
+            max-width: 1860px;
+            margin-bottom: 40px;
+        }
+        .camera-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .camera-title { 
+            text-align: center; 
+            padding: 10px; 
+            background-color: #333; 
+            color: white; 
+            margin: 0 0 5px 0; 
+            box-sizing: border-box;
+            border-radius: 5px 5px 0 0;
+            width: 100%;
+            max-width: 1000px;
+        }
+        .camera-feed { 
+            border: 2px solid #333; 
+            border-radius: 0 0 5px 5px; 
+            overflow: hidden; 
+            background-color: #000; 
+            position: relative; 
+            box-sizing: border-box; 
+            transition: all 0.3s ease;
+            width: 100%;
+            max-width: 1000px;
+        }
+        .camera-feed.separate {
+            height: 100%;
+            width: 100%; 
+        }
+        .camera-feed.separate img { 
+            width: 100%; 
+            height: 100%;
+            object-fit: cover;
+        }
+        .camera-feed.single {
+            height: 100%;
+            width: 100%; 
+        }
+        .camera-feed.single img { 
+            width: 100%; 
+            height: 100%;
+            object-fit: cover;
+        }
+        .draw-roi-btn, .remove-roi-btn { 
+            position: absolute; 
+            bottom: 10px; 
+            padding: 5px 10px; 
+            background-color: #333; 
+            color: white; 
+            border: none; 
+            border-radius: 3px; 
+            cursor: pointer;
+        }
+        .draw-roi-btn { 
+            left: 10px; 
+        }
+        .remove-roi-btn { 
+            left: 100px; 
+        }
+        .draw-roi-btn:hover, .remove-roi-btn:hover { 
+            background-color: #555; 
+        }
+        .pagination { 
+            text-align: center; 
+            margin-top: 20px; 
+            margin-bottom: 20px; 
+            display: none; 
+        }
+        .pagination.active { 
+            display: block; 
+        }
+        .pagination a { 
+            padding: 10px 20px; 
+            margin: 0 10px; 
+            background-color: #333; 
+            color: white; 
+            text-decoration: none; 
+            border-radius: 5px; 
+        }
+        .pagination a:hover { 
+            background-color: #555; 
+        }
+        .pagination a.disabled { 
+            background-color: #ccc; 
+            cursor: not-allowed; 
+        }
+        .logout-btn {
+            padding: 10px 20px;
+            background-color: #333;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .logout-btn:hover {
+            background-color: #555;
+        }
+        canvas { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            display: none; 
+        }
+        .camera-feed.separate canvas { 
+            width: 100%; 
+            max-height: 563px; 
+        }
+        .camera-feed.single canvas { 
+            width: 100%; 
+            max-height: 338px; 
+            display: none !important; 
+        }
+        .custom-dialog {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.3);
+            z-index: 1000;
+            max-width: 400px;
+            width: 90%;
+        }
+        .custom-dialog-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 999;
+        }
+        .camera-list {
+            max-height: 150px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            margin: 10px 0;
+            padding: 5px;
+        }
+        .camera-option {
+            padding: 5px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .camera-option.selected {
+            background-color: #e0e0e0;
+        }
+        .camera-option.disabled {
+            color: #888;
+            cursor: not-allowed;
+        }
+        .tick {
+            color: green;
+            font-weight: bold;
+        }
+        .custom-dialog button {
+            padding: 5px 15px;
+            margin: 5px;
+            background-color: #333;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .custom-dialog button:hover {
+            background-color: #555;
+        }
+        .checkbox-container {
+            margin: 10px 0;
+        }
+        .refresh-btn {
+            padding: 10px 20px;
+            background-color: #333;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .refresh-btn:hover {
+            background-color: #555;
+        }
+        .camera-ip {
+            font-size: 0.8em;
+            color: #ccc;
+            margin-left: 10px;
+        }
+
+        /* Media Queries for Mobile Responsiveness */
+        @media (max-width: 768px) {
+            .camera-grid.separate {
+                grid-template-columns: 1fr;
+            }
+            .camera-grid.single {
+                grid-template-columns: 1fr;
+            }
+            .camera-title {
+                max-width: 100%;
+            }
+            .camera-feed {
+                max-width: 100%;
+            }
+            .refresh-btn, .recordings-btn {
+                top: 10px;
+                padding: 5px 10px;
+            }
+            .dropdown-content, .nested-content {
+                min-width: 100px;
+                left: 0;
+            }
+            .nested-content {
+                left: 0;
+                top: 100%;
+            }
+            .controls button, .pagination a, .logout a {
+                display: inline-block;
+                margin: 5px;
+                padding: 8px 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>AI SmartVision</h1>
+
+    <div class="top-controls">
+        <div class="top-left-controls">
+            {% if view_mode == 'separate' %}
+            <a href="{{ url_for('recordings') }}" class="recordings-btn">Recordings</a>
+            {% endif %}
+        </div>
+        <div class="top-right-controls">
+            <button class="refresh-btn" onclick="refreshStreams()">🔂 Refresh</button>
+            <a href="{{ url_for('logout') }}" class="logout-btn">Logout</a>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button class="toggle-view-btn" onclick="toggleView()">Toggle View</button>
+        {% if view_mode == 'separate' %}
+            <div class="dropdown">
+                <button class="database-btn">Database</button>
+                <div class="dropdown-content">
+                    <div class="nested-dropdown">
+                        <span>Add Staff</span>
+                        <div class="nested-content">
+                            <a href="#" onclick="addPerson('static')">Static (NEW)</a>
+                            <a href="#" onclick="addPerson('dynamic')">Dynamic (EXISTING)</a>
+                        </div>
+                    </div>
+                    <div class="nested-dropdown">
+                        <span>Remove Staff</span>
+                        <div class="nested-content" id="remove-person-list">
+                            {% if persons|length == 0 %}
+                                <span>No persons in database</span>
+                            {% else %}
+                                {% for person in persons %}
+                                    <a href="#" onclick="removePerson('{{ person }}')">{{ person }}</a>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+                    </div>
+                    <a href="#" onclick="clearDatabase()">Clear Database</a>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+
+    <div class="camera-grid {{ 'single' if view_mode == 'single' else 'separate' }}">
+        {% for i in camera_indices %}
+        <div class="camera-container">
+            <h3 class="camera-title {{ 'single' if view_mode == 'single' else 'separate' }}">
+                Camera {{ i }} <span class="camera-ip">({{ camera_data[i]['ip'] }})</span>
+            </h3>
+            <div class="camera-feed {{ 'single' if view_mode == 'single' else 'separate' }}" data-camera-id="{{ i }}">
+                <img src="{{ url_for('video_feed', camera_id=i, view=view_mode) }}" alt="Camera {{ i }} Feed">
+                {% if view_mode == 'separate' %}
+                    <button class="draw-roi-btn" onclick="startDrawingROI('{{ i }}')">Draw ROI</button>
+                    <button class="remove-roi-btn" onclick="removeROI('{{ i }}')">Clear ROI</button>
+                {% endif %}
+                <canvas id="canvas-{{ i }}"></canvas>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="pagination {{ 'active' if total_pages > 1 else '' }}">
+        {% if current_page > 1 %}
+            <a href="{{ url_for('index', page=current_page-1, view=view_mode) }}" onclick="stopStreams(event)">Previous</a>
+        {% else %}
+            <a href="#" class="disabled">Previous</a>
+        {% endif %}
+        <span>Page {{ current_page }} of {{ total_pages }}</span>
+        {% if current_page < total_pages %}
+            <a href="{{ url_for('index', page=current_page+1, view=view_mode) }}" onclick="stopStreams(event)">Next</a>
+        {% else %}
+            <a href="#" class="disabled">Next</a>
+        {% endif %}
+    </div>
+
+    <script>
+        let drawing = false;
+        let points = [];
+        let currentCameraId = null;
+        let initialFrame = null;
+        let defaultCamerasList = [2,3,4,5];
+        const currentView = '{{ view_mode | safe }}';
+        const currentPage = {{ current_page | default(1) | safe }};
+        const activeCameras = {{ active_cameras | tojson | safe }};
+
+        // UI functions
+        function toggleView() {
+            stopStreams(null);
+            const newView = currentView === 'separate' ? 'single' : 'separate';
+            console.log('Current View:', currentView, 'New View:', newView, 'Current Page:', currentPage);
+            const url = newView === 'single' ? '/?view=single' : `/${currentPage}?view=separate`;
+            console.log('Redirecting to:', url);
+            window.location.href = url;
+        }
+
+        function refreshStreams() {
+            console.log('Refreshing all camera streams...');
+            stopStreams(null);
+            fetch('/refresh_cameras', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Refresh response:', data.message);
+                const images = document.querySelectorAll('.camera-feed img');
+                images.forEach(img => {
+                    const cameraId = img.closest('.camera-feed').dataset.cameraId;
+                    img.src = `/video_feed/${cameraId}?view=${currentView}&t=${new Date().getTime()}`;
+                });
+            })
+            .catch(error => {
+                console.error('Error refreshing cameras:', error);
+                alert('Failed to refresh camera streams. Please try again.');
+                const images = document.querySelectorAll('.camera-feed img');
+                images.forEach(img => {
+                    const cameraId = img.closest('.camera-feed').dataset.cameraId;
+                    img.src = `/video_feed/${cameraId}?view=${currentView}&t=${new Date().getTime()}`;
+                });
+            });
+        }
+
+        function stopStreams(event) {
+            if (event) event.preventDefault();
+            const images = document.querySelectorAll('.camera-feed img');
+            images.forEach(img => { img.src = ''; });
+            if (event) {
+                setTimeout(() => { window.location.href = event.target.href; }, 100);
+            }
+        }
+
+        function startDrawingROI(cameraId) {
+            if (currentView !== 'separate') return;
+            currentCameraId = cameraId;
+            const canvas = document.getElementById(`canvas-${cameraId}`);
+            const ctx = canvas.getContext('2d');
+            const img = document.querySelector(`.camera-feed[data-camera-id="${cameraId}"] img`);
+            const feed = document.querySelector(`.camera-feed[data-camera-id="${cameraId}"]`);
+
+            img.style.display = 'none';
+            canvas.style.display = 'block';
+            feed.querySelector('.draw-roi-btn').style.display = 'none';
+            feed.querySelector('.remove-roi-btn').style.display = 'none';
+
+            fetch(`/get_initial_frame/${cameraId}`)
+                .then(response => response.blob())
+                .then(blob => {
+                    const imgUrl = URL.createObjectURL(blob);
+                    initialFrame = new Image();
+                    initialFrame.onload = () => {
+                        canvas.width = feed.clientWidth;
+                        canvas.height = feed.clientHeight;
+                        ctx.drawImage(initialFrame, 0, 0, canvas.width, canvas.height);
+                        drawing = true;
+                    };
+                    initialFrame.src = imgUrl;
+                })
+                .catch(error => console.error('Error fetching initial frame:', error));
+        }
+
+        function removeROI(cameraId) {
+            if (confirm(`Are you sure you want to remove the ROI for Camera ${cameraId}?`)) {
+                fetch(`/remove_roi/${cameraId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log(`ROI removed for Camera ${cameraId}:`, data);
+                    points = [];
+                    const img = document.querySelector(`.camera-feed[data-camera-id="${cameraId}"] img`);
+                    img.src = `/video_feed/${cameraId}?view=${currentView}&t=${new Date().getTime()}`;
+                })
+                .catch(error => {
+                    console.error('Error removing ROI:', error);
+                    alert('Failed to remove ROI. Please try again.');
+                });
+            }
+        }
+
+        document.querySelectorAll('canvas').forEach(canvas => {
+            canvas.onmousedown = (e) => {
+                if (!drawing || e.button !== 0) return;
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                points.push([x, y]);
+                drawROI(canvas.getContext('2d'), canvas);
+            };
+
+            canvas.oncontextmenu = (e) => {
+                e.preventDefault();
+                if (drawing && points.length > 2) {
+                    drawing = false;
+                    drawROI(canvas.getContext('2d'), canvas, true);
+                    saveROI(currentCameraId);
+                    resetDrawing(currentCameraId);
+                }
+            };
+        });
+
+        function drawROI(ctx, canvas, close = false) {
+            if (!initialFrame) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(initialFrame, 0, 0, canvas.width, canvas.height);
+            
+            ctx.beginPath();
+            ctx.strokeStyle = 'yellow';
+            ctx.lineWidth = 2;
+            for (let i = 0; i < points.length; i++) {
+                const [x, y] = points[i];
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            if (close) ctx.closePath();
+            ctx.stroke();
+
+            ctx.fillStyle = 'red';
+            points.forEach(([x, y]) => {
+                ctx.beginPath();
+                ctx.arc(x, y, 5, 0, 2 * Math.PI);
+                ctx.fill();
+            });
+        }
+
+        function saveROI(cameraId) {
+            const canvas = document.getElementById(`canvas-${cameraId}`);
+            const canvasWidth = canvas.width;
+            const canvasHeight = canvas.height;
+            const nativeWidth = 1280;
+            const nativeHeight = 720;
+            const scaleX = nativeWidth / canvasWidth;
+            const scaleY = nativeHeight / canvasHeight;
+            const scaledPoints = points.map(([x, y]) => [
+                Math.round(x * scaleX),
+                Math.round(y * scaleY)
+            ]);
+
+            fetch(`/save_roi/${cameraId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ roi: scaledPoints })
+            })
+                .then(response => response.json())
+                .then(data => console.log(`Scaled ROI for Camera ${cameraId}:`, scaledPoints))
+                .catch(error => console.error('Error saving ROI:', error));
+        }
+
+        function resetDrawing(cameraId) {
+            const canvas = document.getElementById(`canvas-${cameraId}`);
+            const img = document.querySelector(`.camera-feed[data-camera-id="${cameraId}"] img`);
+            const drawBtn = document.querySelector(`.camera-feed[data-camera-id="${cameraId}"] .draw-roi-btn`);
+            const removeBtn = document.querySelector(`.camera-feed[data-camera-id="${cameraId}"] .remove-roi-btn`);
+            canvas.style.display = 'none';
+            img.style.display = 'block';
+            if (drawBtn) drawBtn.style.display = 'block';
+            if (removeBtn) removeBtn.style.display = 'block';
+            initialFrame = null;
+        }
+
+        // Database functions
+        function addPerson(type) {
+            if (type === 'static') {
+                const overlay = document.createElement('div');
+                overlay.className = 'custom-dialog-overlay';
+                document.body.appendChild(overlay);
+
+                const dialog = document.createElement('div');
+                dialog.className = 'custom-dialog';
+                dialog.innerHTML = `
+                    <p>Please enter a name and select cameras for static capture:</p>
+                    <label for="static-name">Name:</label>
+                    <input type="text" id="static-name" placeholder="Enter name" style="width: 100%; padding: 5px; margin-bottom: 10px;">
+                    <div class="camera-list" id="camera-list">
+                        ${activeCameras.map(i => `
+                            <div class="camera-option" data-camera-id="${i}" onclick="toggleCameraSelection(this)">
+                                Camera ${i} <span class="tick" style="display: none;">✔</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="checkbox-container">
+                        <label><input type="checkbox" id="use-defaults" onclick="toggleDefaults(this)"> Use Defaults</label>
+                    </div>
+                    <div>
+                        <button onclick="continueStaticAdd(this)">Continue</button>
+                        <button onclick="cancelDialog(this)">Cancel</button>
+                    </div>
+                `;
+                document.body.appendChild(dialog);
+            } else if (type === 'dynamic') {
+                const overlay = document.createElement('div');
+                overlay.className = 'custom-dialog-overlay';
+                document.body.appendChild(overlay);
+
+                const dialog = document.createElement('div');
+                dialog.className = 'custom-dialog';
+                dialog.innerHTML = `
+                    <p>Please enter an existing name and select cameras for dynamic capture:</p>
+                    <label for="dynamic-name">Name:</label>
+                    <input type="text" id="dynamic-name" placeholder="Enter existing name" style="width: 100%; padding: 5px; margin-bottom: 10px;">
+                    <div class="camera-list" id="camera-list">
+                        ${activeCameras.map(i => `
+                            <div class="camera-option" data-camera-id="${i}" onclick="toggleCameraSelection(this)">
+                                Camera ${i} <span class="tick" style="display: none;">✔</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="checkbox-container">
+                        <label><input type="checkbox" id="use-defaults" onclick="toggleDefaults(this)"> Use Defaults</label>
+                    </div>
+                    <div>
+                        <button onclick="continueDynamicAdd(this)">Continue</button>
+                        <button onclick="cancelDialog(this)">Cancel</button>
+                    </div>
+                `;
+                document.body.appendChild(dialog);
+            }
+        }
+
+        function toggleCameraSelection(option) {
+            if (option.classList.contains('disabled')) return;
+            const isSelected = option.classList.contains('selected');
+            option.classList.toggle('selected', !isSelected);
+            const tick = option.querySelector('.tick');
+            tick.style.display = isSelected ? 'none' : 'inline';
+        }
+
+        function toggleDefaults(checkbox) {
+            const cameraList = document.getElementById('camera-list');
+            const options = cameraList.getElementsByClassName('camera-option');
+            const defaultCameras = defaultCamerasList;
+
+            if (checkbox.checked) {
+                Array.from(options).forEach(option => {
+                    const cameraId = parseInt(option.dataset.cameraId);
+                    option.classList.toggle('selected', defaultCameras.includes(cameraId));
+                    option.classList.add('disabled');
+                    const tick = option.querySelector('.tick');
+                    tick.style.display = defaultCameras.includes(cameraId) ? 'inline' : 'none';
+                });
+            } else {
+                Array.from(options).forEach(option => {
+                    option.classList.remove('selected');
+                    option.classList.remove('disabled');
+                    const tick = option.querySelector('.tick');
+                    tick.style.display = 'none';
+                });
+            }
+        }
+
+        function continueStaticAdd(button) {
+            const dialog = button.closest('.custom-dialog');
+            const name = dialog.querySelector('#static-name').value.trim();
+            if (!name) {
+                alert('Please enter a name.');
+                return;
+            }
+
+            const useDefaults = dialog.querySelector('#use-defaults').checked;
+            const defaultCameras = defaultCamerasList;
+            let selectedCameras;
+
+            if (useDefaults) {
+                selectedCameras = defaultCameras;
+            } else {
+                const options = dialog.querySelectorAll('.camera-option.selected');
+                selectedCameras = Array.from(options).map(option => parseInt(option.dataset.cameraId));
+                if (selectedCameras.length === 0) {
+                    alert('Please select at least one camera.');
+                    return;
+                }
+            }
+
+            const cameraParam = selectedCameras.slice(0, 4).join(',');
+            window.location.href = `/capture_static?name=${encodeURIComponent(name)}&cameras=${cameraParam}`;
+            cancelDialog(button);
+        }
+
+        function continueDynamicAdd(button) {
+            const dialog = button.closest('.custom-dialog');
+            const name = dialog.querySelector('#dynamic-name').value.trim();
+            if (!name) {
+                alert('Please enter a name.');
+                return;
+            }
+
+            const useDefaults = dialog.querySelector('#use-defaults').checked;
+            const defaultCameras = defaultCamerasList;
+            let selectedCameras;
+
+            if (useDefaults) {
+                selectedCameras = defaultCameras;
+            } else {
+                const options = dialog.querySelectorAll('.camera-option.selected');
+                selectedCameras = Array.from(options).map(option => parseInt(option.dataset.cameraId));
+                if (selectedCameras.length === 0) {
+                    alert('Please select at least one camera.');
+                    return;
+                }
+            }
+
+            fetch('/check_person_and_redirect', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: name,
+                    cameras: selectedCameras
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.redirect) {
+                    window.location.href = data.redirect;
+                } else {
+                    alert(data.message);
+                }
+                cancelDialog(button);
+            })
+            .catch(error => {
+                console.error('Error checking person:', error);
+                alert('An error occurred while checking the person.');
+                cancelDialog(button);
+            });
+        }
+
+        function cancelDialog(button) {
+            const dialog = button.closest('.custom-dialog');
+            const overlay = document.querySelector('.custom-dialog-overlay');
+            if (dialog) document.body.removeChild(dialog);
+            if (overlay) document.body.removeChild(overlay);
+        }
+
+        function updatePersonList(name) {
+            const list = document.getElementById('remove-person-list');
+            if (list.children[0].tagName === 'SPAN') list.innerHTML = '';
+            const a = document.createElement('a');
+            a.href = '#';
+            a.textContent = name;
+            a.onclick = () => removePerson(name);
+            list.appendChild(a);
+        }
+
+        function removePerson(name) {
+            if (confirm(`Are you sure you want to remove ${name}?`)) {
+                const list = document.getElementById('remove-person-list');
+                const personLinks = list.getElementsByTagName('a');
+                let removedElement = null;
+                for (let i = 0; i < personLinks.length; i++) {
+                    if (personLinks[i].textContent === name) {
+                        removedElement = personLinks[i];
+                        list.removeChild(removedElement);
+                        break;
+                    }
+                }
+                if (list.children.length === 0) {
+                    list.innerHTML = '<span>No persons in database</span>';
+                }
+                fetch('/remove_person', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name })
+                })
+                .then(response => response.json())
+                .then(data => {})
+                .catch(error => {
+                    console.error('Error removing person:', error);
+                    alert('Failed to remove person from server');
+                    if (removedElement) {
+                        list.appendChild(removedElement);
+                        if (list.children[0].tagName === 'SPAN') {
+                            list.removeChild(list.children[0]);
+                        }
+                    }
+                });
+            }
+        }
+
+        function clearDatabase() {
+            if (confirm('Are you sure you want to clear the entire database?')) {
+                const list = document.getElementById('remove-person-list');
+                let originalContent = list.innerHTML;
+                list.innerHTML = '<span>No persons in database</span>';
+                fetch('/clear_database', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                })
+                .then(response => response.json())
+                .then(data => {})
+                .catch(error => {
+                    console.error('Error clearing database:', error);
+                    alert('Failed to clear database on server');
+                    list.innerHTML = originalContent;
+                });
+            }
+        }
+    </script>
+</body>
+</html>

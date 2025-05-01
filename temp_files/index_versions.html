@@ -1,0 +1,2143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera Portal</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f0f0f0; margin: 0; padding: 20px; }
+        h1 { text-align: center; color: #333; }
+        .camera-grid { 
+            display: grid; 
+            grid-template-columns: repeat(2, 1fr); 
+            gap: 20px; 
+            padding: 20px; 
+            max-width: 1808px; /* 2 * 854 + 20px gap */
+            margin: 0 auto; 
+        }
+        .camera-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .camera-title { 
+            text-align: center; 
+            padding: 10px; 
+            background-color: #333; 
+            color: white; 
+            margin: 0 0 5px 0; /* Space below title */
+            width: 854px; /* Match feed width */
+            box-sizing: border-box;
+            border-radius: 5px 5px 0 0; /* Rounded top corners */
+        }
+        .camera-feed { 
+            border: 2px solid #333; 
+            border-radius: 0 0 5px 5px; /* Rounded bottom corners */
+            overflow: hidden; 
+            background-color: #000; 
+            width: 854px; /* Exact feed width */
+            height: 480px; /* Exact feed height */
+            position: relative; 
+            box-sizing: border-box; /* Include border in size */
+        }
+        .camera-feed img { 
+            width: 854px; /* Match container exactly */
+            height: 480px; 
+            object-fit: contain; /* Ensure no cropping */
+            display: block; /* Remove inline spacing */
+        }
+        .draw-roi-btn { 
+            position: absolute; 
+            bottom: 10px; 
+            left: 10px; 
+            padding: 5px 10px; 
+            background-color: #333; 
+            color: white; 
+            border: none; 
+            border-radius: 3px; 
+            cursor: pointer; 
+        }
+        .draw-roi-btn:hover { background-color: #555; }
+        .pagination { text-align: center; margin-top: 20px; }
+        .pagination a { padding: 10px 20px; margin: 0 10px; background-color: #333; color: white; text-decoration: none; border-radius: 5px; }
+        .pagination a:hover { background-color: #555; }
+        .pagination a.disabled { background-color: #ccc; cursor: not-allowed; }
+        .logout { text-align: center; margin-top: 20px; }
+        .logout a { padding: 10px 20px; background-color: #333; color: white; text-decoration: none; border-radius: 5px; }
+        .logout a:hover { background-color: #555; }
+        canvas { position: absolute; top: 0; left: 0; width: 854px; height: 480px; display: none; }
+    </style>
+</head>
+<body>
+    <h1>Camera Portal</h1>
+    <div class="camera-grid">
+        {% for i in camera_indices %}
+        <div class="camera-container">
+            <h3 class="camera-title">Camera {{ i }}</h3>
+            <div class="camera-feed" data-camera-id="{{ i }}">
+                <img src="{{ url_for('video_feed', camera_id=i) }}" alt="Camera {{ i }} Feed">
+                <button class="draw-roi-btn" onclick="startDrawingROI('{{ i }}')">Draw ROI</button>
+                <canvas id="canvas-{{ i }}"></canvas>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    <div class="pagination">
+        {% if current_page > 1 %}
+            <a href="{{ url_for('index', page=current_page-1) }}">Previous</a>
+        {% else %}
+            <a href="#" class="disabled">Previous</a>
+        {% endif %}
+        <span>Page {{ current_page }} of {{ total_pages }}</span>
+        {% if current_page < total_pages %}
+            <a href="{{ url_for('index', page=current_page+1) }}">Next</a>
+        {% else %}
+            <a href="#" class="disabled">Next</a>
+        {% endif %}
+    </div>
+    <div class="logout">
+        <a href="{{ url_for('logout') }}">Logout</a>
+    </div>
+
+    <script>
+        let drawing = false;
+        let points = [];
+        let currentCameraId = null;
+
+        function startDrawingROI(cameraId) {
+            currentCameraId = cameraId;
+            const canvas = document.getElementById(`canvas-${cameraId}`);
+            const ctx = canvas.getContext('2d');
+            const img = document.querySelector(`.camera-feed[data-camera-id="${cameraId}"] img`);
+            const feed = document.querySelector(`.camera-feed[data-camera-id="${cameraId}"]`);
+
+            img.style.display = 'none';
+            canvas.style.display = 'block';
+            feed.querySelector('.draw-roi-btn').style.display = 'none';
+
+            fetch(`/get_initial_frame/${cameraId}`)
+                .then(response => response.blob())
+                .then(blob => {
+                    const imgUrl = URL.createObjectURL(blob);
+                    const initialImg = new Image();
+                    initialImg.onload = () => {
+                        canvas.width = 854;  
+                        canvas.height = 480;
+                        ctx.drawImage(initialImg, 0, 0, canvas.width, canvas.height);
+                        drawing = true;
+                    };
+                    initialImg.src = imgUrl;
+                })
+                .catch(error => console.error('Error fetching initial frame:', error));
+        }
+
+        document.querySelectorAll('canvas').forEach(canvas => {
+            canvas.onmousedown = (e) => {
+                if (!drawing || e.button !== 0) return;
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                points.push([x, y]);
+                drawROI(canvas.getContext('2d'), canvas);
+            };
+
+            canvas.oncontextmenu = (e) => {
+                e.preventDefault();
+                if (drawing && points.length > 2) {
+                    drawing = false;
+                    drawROI(canvas.getContext('2d'), canvas, true);
+                    saveROI(currentCameraId);
+                    resetDrawing(currentCameraId);
+                }
+            };
+        });
+
+        function drawROI(ctx, canvas, close = false) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const img = new Image();
+            img.src = `/get_initial_frame/${currentCameraId}`;
+            img.onload = () => {
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                ctx.beginPath();
+                ctx.strokeStyle = 'yellow';
+                ctx.lineWidth = 2;
+                for (let i = 0; i < points.length; i++) {
+                    const [x, y] = points[i];
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                if (close) ctx.closePath();
+                ctx.stroke();
+            };
+        }
+
+        function saveROI(cameraId) {
+            const canvasWidth = 854;
+            const canvasHeight = 480;
+            const nativeWidth = 1280;
+            const nativeHeight = 720;
+            const scaleX = nativeWidth / canvasWidth;  
+            const scaleY = nativeHeight / canvasHeight;  
+            const scaledPoints = points.map(([x, y]) => [
+                Math.round(x * scaleX),  
+                Math.round(y * scaleY)    
+            ]);
+
+            fetch(`/save_roi/${cameraId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ roi: scaledPoints })
+            })
+                .then(response => response.json())
+                .then(data => console.log(`Scaled ROI for Camera ${cameraId}:`, scaledPoints))
+                .catch(error => console.error('Error saving ROI:', error));
+        }
+
+        function resetDrawing(cameraId) {
+            const canvas = document.getElementById(`canvas-${cameraId}`);
+            const img = document.querySelector(`.camera-feed[data-camera-id="${cameraId}"] img`);
+            const btn = document.querySelector(`.camera-feed[data-camera-id="${cameraId}"] .draw-roi-btn`);
+            canvas.style.display = 'none';
+            img.style.display = 'block';
+            btn.style.display = 'block';
+            points = [];
+        }
+    </script>
+</body>
+</html>
+
+
+
+
+
+
+
+<!-- ==================================================================================================== -->
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera Portal</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f0f0f0; margin: 0; padding: 20px; }
+        h1 { text-align: center; color: #333; }
+        .controls { text-align: center; margin-bottom: 20px; }
+        .toggle-view-btn { padding: 10px 20px; background-color: #333; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        .toggle-view-btn:hover { background-color: #555; }
+        .camera-grid { 
+            display: grid; 
+            gap: 20px; 
+            padding: 20px; 
+            margin: 0 auto; 
+            transition: all 0.3s ease;
+        }
+        .camera-grid.separate { 
+            grid-template-columns: repeat(2, 1fr); 
+            max-width: 1808px;
+        }
+        .camera-grid.single { 
+            grid-template-columns: repeat(4, 1fr); 
+            max-width: 1640px;
+        }
+        .camera-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .camera-title { 
+            text-align: center; 
+            padding: 10px; 
+            background-color: #333; 
+            color: white; 
+            margin: 0 0 5px 0; 
+            box-sizing: border-box;
+            border-radius: 5px 5px 0 0;
+        }
+        .camera-title.separate { width: 854px; }
+        .camera-title.single { width: 400px; }
+        .camera-feed { 
+            border: 2px solid #333; 
+            border-radius: 0 0 5px 5px; 
+            overflow: hidden; 
+            background-color: #000; 
+            position: relative; 
+            box-sizing: border-box; 
+            transition: all 0.3s ease;
+        }
+        .camera-feed.separate { 
+            width: 854px; 
+            height: 480px; 
+        }
+        .camera-feed.single { 
+            width: 400px; 
+            height: 225px; 
+        }
+        .camera-feed img { 
+            display: block; 
+            object-fit: contain; 
+        }
+        .camera-feed.separate img { 
+            width: 854px; 
+            height: 480px; 
+        }
+        .camera-feed.single img { 
+            width: 400px; 
+            height: 225px; 
+        }
+        .draw-roi-btn { 
+            position: absolute; 
+            bottom: 10px; 
+            left: 10px; 
+            padding: 5px 10px; 
+            background-color: #333; 
+            color: white; 
+            border: none; 
+            border-radius: 3px; 
+            cursor: pointer; 
+        }
+        .draw-roi-btn:hover { background-color: #555; }
+        .pagination { text-align: center; margin-top: 20px; display: none; }
+        .pagination.active { display: block; }
+        .pagination a { padding: 10px 20px; margin: 0 10px; background-color: #333; color: white; text-decoration: none; border-radius: 5px; }
+        .pagination a:hover { background-color: #555; }
+        .pagination a.disabled { background-color: #ccc; cursor: not-allowed; }
+        .logout { text-align: center; margin-top: 20px; }
+        .logout a { padding: 10px 20px; background-color: #333; color: white; text-decoration: none; border-radius: 5px; }
+        .logout a:hover { background-color: #555; }
+        canvas { position: absolute; top: 0; left: 0; display: none; }
+        .camera-feed.separate canvas { width: 854px; height: 480px; }
+        .camera-feed.single canvas { width: 400px; height: 225px; display: none !important; }
+    </style>
+</head>
+<body>
+    <h1>Camera Portal</h1>
+    <div class="controls">
+        <button class="toggle-view-btn" onclick="toggleView()">Toggle View</button>
+    </div>
+    <div class="camera-grid {{ 'single' if view_mode == 'single' else 'separate' }}">
+        {% for i in camera_indices %}
+        <div class="camera-container">
+            <h3 class="camera-title {{ 'single' if view_mode == 'single' else 'separate' }}">Camera {{ i }}</h3>
+            <div class="camera-feed {{ 'single' if view_mode == 'single' else 'separate' }}" data-camera-id="{{ i }}">
+                <img src="{{ url_for('video_feed', camera_id=i, view=view_mode) }}" alt="Camera {{ i }} Feed">
+                {% if view_mode == 'separate' %}
+                    <button class="draw-roi-btn" onclick="startDrawingROI('{{ i }}')">Draw ROI</button>
+                {% endif %}
+                <canvas id="canvas-{{ i }}"></canvas>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    <div class="pagination {{ 'active' if view_mode == 'separate' else '' }}">
+        {% if current_page > 1 %}
+            <a href="{{ url_for('index', page=current_page-1, view='separate') }}">Previous</a>
+        {% else %}
+            <a href="#" class="disabled">Previous</a>
+        {% endif %}
+        <span>Page {{ current_page }} of {{ total_pages }}</span>
+        {% if current_page < total_pages %}
+            <a href="{{ url_for('index', page=current_page+1, view='separate') }}">Next</a>
+        {% else %}
+            <a href="#" class="disabled">Next</a>
+        {% endif %}
+    </div>
+    <div class="logout">
+        <a href="{{ url_for('logout') }}">Logout</a>
+    </div>
+
+    <script>
+        let drawing = false;
+        let points = [];
+        let currentCameraId = null;
+        const currentView = '{{ view_mode | safe }}'; // Define as const from Flask
+        const currentPage = {{ current_page | default(1) | safe }}; // Define current_page from Flask
+
+        function toggleView() {
+            // Stop fetching streams to free resources
+            const images = document.querySelectorAll('.camera-feed img');
+            images.forEach(img => {
+                img.src = ''; // Clear current streams
+            });
+            const newView = currentView === 'separate' ? 'single' : 'separate';
+            console.log('Current View:', currentView, 'New View:', newView, 'Current Page:', currentPage);
+            const url = newView === 'single' ? '/?view=single' : `/${currentPage}?view=separate`;
+            console.log('Redirecting to:', url);
+            window.location.href = url;
+        }
+
+        function startDrawingROI(cameraId) {
+            if (currentView !== 'separate') return;
+            currentCameraId = cameraId;
+            const canvas = document.getElementById(`canvas-${cameraId}`);
+            const ctx = canvas.getContext('2d');
+            const img = document.querySelector(`.camera-feed[data-camera-id="${cameraId}"] img`);
+            const feed = document.querySelector(`.camera-feed[data-camera-id="${cameraId}"]`);
+
+            img.style.display = 'none';
+            canvas.style.display = 'block';
+            feed.querySelector('.draw-roi-btn').style.display = 'none';
+
+            fetch(`/get_initial_frame/${cameraId}`)
+                .then(response => response.blob())
+                .then(blob => {
+                    const imgUrl = URL.createObjectURL(blob);
+                    const initialImg = new Image();
+                    initialImg.onload = () => {
+                        canvas.width = 854;
+                        canvas.height = 480;
+                        ctx.drawImage(initialImg, 0, 0, canvas.width, canvas.height);
+                        drawing = true;
+                    };
+                    initialImg.src = imgUrl;
+                })
+                .catch(error => console.error('Error fetching initial frame:', error));
+        }
+
+        document.querySelectorAll('canvas').forEach(canvas => {
+            canvas.onmousedown = (e) => {
+                if (!drawing || e.button !== 0) return;
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                points.push([x, y]);
+                drawROI(canvas.getContext('2d'), canvas);
+            };
+
+            canvas.oncontextmenu = (e) => {
+                e.preventDefault();
+                if (drawing && points.length > 2) {
+                    drawing = false;
+                    drawROI(canvas.getContext('2d'), canvas, true);
+                    saveROI(currentCameraId);
+                    resetDrawing(currentCameraId);
+                }
+            };
+        });
+
+        function drawROI(ctx, canvas, close = false) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const img = new Image();
+            img.src = `/get_initial_frame/${currentCameraId}`;
+            img.onload = () => {
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                ctx.beginPath();
+                ctx.strokeStyle = 'yellow';
+                ctx.lineWidth = 2;
+                for (let i = 0; i < points.length; i++) {
+                    const [x, y] = points[i];
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                if (close) ctx.closePath();
+                ctx.stroke();
+            };
+        }
+
+        function saveROI(cameraId) {
+            const canvasWidth = 854;
+            const canvasHeight = 480;
+            const nativeWidth = 1280;
+            const nativeHeight = 720;
+            const scaleX = nativeWidth / canvasWidth;  // 1280 / 854 ≈ 1.498
+            const scaleY = nativeHeight / canvasHeight;  // 720 / 480 = 1.5
+            const scaledPoints = points.map(([x, y]) => [
+                Math.round(x * scaleX),
+                Math.round(y * scaleY)
+            ]);
+
+            fetch(`/save_roi/${cameraId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ roi: scaledPoints })
+            })
+                .then(response => response.json())
+                .then(data => console.log(`Scaled ROI for Camera ${cameraId}:`, scaledPoints))
+                .catch(error => console.error('Error saving ROI:', error));
+        }
+
+        function resetDrawing(cameraId) {
+            const canvas = document.getElementById(`canvas-${cameraId}`);
+            const img = document.querySelector(`.camera-feed[data-camera-id="${cameraId}"] img`);
+            const btn = document.querySelector(`.camera-feed[data-camera-id="${cameraId}"] .draw-roi-btn`);
+            canvas.style.display = 'none';
+            img.style.display = 'block';
+            if (btn) btn.style.display = 'block';
+            points = [];
+        }
+    </script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!-- =========================================================================================================================== -->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera Portal</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f0f0f0; margin: 0; padding: 20px; }
+        h1 { text-align: center; color: #333; }
+        .controls { text-align: center; margin-bottom: 20px; }
+        .toggle-view-btn { padding: 10px 20px; background-color: #333; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        .toggle-view-btn:hover { background-color: #555; }
+        .camera-grid { 
+            display: grid; 
+            gap: 20px; 
+            padding: 20px; 
+            margin: 0 auto; 
+            transition: all 0.3s ease;
+        }
+        .camera-grid.separate { 
+            grid-template-columns: repeat(2, 1fr); 
+            max-width: 1808px;
+        }
+        .camera-grid.single { 
+            grid-template-columns: repeat(4, 1fr); 
+            max-width: 1640px;
+        }
+        .camera-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .camera-title { 
+            text-align: center; 
+            padding: 10px; 
+            background-color: #333; 
+            color: white; 
+            margin: 0 0 5px 0; 
+            box-sizing: border-box;
+            border-radius: 5px 5px 0 0;
+        }
+        .camera-title.separate { width: 854px; }
+        .camera-title.single { width: 400px; }
+        .camera-feed { 
+            border: 2px solid #333; 
+            border-radius: 0 0 5px 5px; 
+            overflow: hidden; 
+            background-color: #000; 
+            position: relative; 
+            box-sizing: border-box; 
+            transition: all 0.3s ease;
+        }
+        .camera-feed.separate { 
+            width: 854px; 
+            height: 480px; 
+        }
+        .camera-feed.single { 
+            width: 400px; 
+            height: 225px; 
+        }
+        .camera-feed img { 
+            display: block; 
+            object-fit: contain; 
+        }
+        .camera-feed.separate img { 
+            width: 854px; 
+            height: 480px; 
+        }
+        .camera-feed.single img { 
+            width: 400px; 
+            height: 225px; 
+        }
+        .draw-roi-btn { 
+            position: absolute; 
+            bottom: 10px; 
+            left: 10px; 
+            padding: 5px 10px; 
+            background-color: #333; 
+            color: white; 
+            border: none; 
+            border-radius: 3px; 
+            cursor: pointer; 
+        }
+        .draw-roi-btn:hover { background-color: #555; }
+        .pagination { text-align: center; margin-top: 20px; display: none; }
+        .pagination.active { display: block; }
+        .pagination a { padding: 10px 20px; margin: 0 10px; background-color: #333; color: white; text-decoration: none; border-radius: 5px; }
+        .pagination a:hover { background-color: #555; }
+        .pagination a.disabled { background-color: #ccc; cursor: not-allowed; }
+        .logout { text-align: center; margin-top: 20px; }
+        .logout a { padding: 10px 20px; background-color: #333; color: white; text-decoration: none; border-radius: 5px; }
+        .logout a:hover { background-color: #555; }
+        canvas { position: absolute; top: 0; left: 0; display: none; }
+        .camera-feed.separate canvas { width: 854px; height: 480px; }
+        .camera-feed.single canvas { width: 400px; height: 225px; display: none !important; }
+    </style>
+</head>
+<body>
+    <h1>Camera Portal</h1>
+    <div class="controls">
+        <button class="toggle-view-btn" onclick="toggleView()">Toggle View</button>
+    </div>
+    <div class="camera-grid {{ 'single' if view_mode == 'single' else 'separate' }}">
+        {% for i in camera_indices %}
+        <div class="camera-container">
+            <h3 class="camera-title {{ 'single' if view_mode == 'single' else 'separate' }}">Camera {{ i }}</h3>
+            <div class="camera-feed {{ 'single' if view_mode == 'single' else 'separate' }}" data-camera-id="{{ i }}">
+                <img src="{{ url_for('video_feed', camera_id=i, view=view_mode) }}" alt="Camera {{ i }} Feed">
+                {% if view_mode == 'separate' %}
+                    <button class="draw-roi-btn" onclick="startDrawingROI('{{ i }}')">Draw ROI</button>
+                {% endif %}
+                <canvas id="canvas-{{ i }}"></canvas>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    <div class="pagination {{ 'active' if view_mode == 'separate' else '' }}">
+        {% if current_page > 1 %}
+            <a href="{{ url_for('index', page=current_page-1, view='separate') }}">Previous</a>
+        {% else %}
+            <a href="#" class="disabled">Previous</a>
+        {% endif %}
+        <span>Page {{ current_page }} of {{ total_pages }}</span>
+        {% if current_page < total_pages %}
+            <a href="{{ url_for('index', page=current_page+1, view='separate') }}">Next</a>
+        {% else %}
+            <a href="#" class="disabled">Next</a>
+        {% endif %}
+    </div>
+    <div class="logout">
+        <a href="{{ url_for('logout') }}">Logout</a>
+    </div>
+
+    <script>
+        let drawing = false;
+        let points = [];
+        let currentCameraId = null;
+        const currentView = '{{ view_mode | safe }}'; // Define as const from Flask
+        const currentPage = {{ current_page | default(1) | safe }}; // Define current_page from Flask
+
+        function toggleView() {
+            // Stop fetching streams to free resources
+            const images = document.querySelectorAll('.camera-feed img');
+            images.forEach(img => {
+                img.src = ''; // Clear current streams
+            });
+            const newView = currentView === 'separate' ? 'single' : 'separate';
+            console.log('Current View:', currentView, 'New View:', newView, 'Current Page:', currentPage);
+            const url = newView === 'single' ? '/?view=single' : `/${currentPage}?view=separate`;
+            console.log('Redirecting to:', url);
+            window.location.href = url;
+        }
+
+        function startDrawingROI(cameraId) {
+            if (currentView !== 'separate') return;
+            currentCameraId = cameraId;
+            const canvas = document.getElementById(`canvas-${cameraId}`);
+            const ctx = canvas.getContext('2d');
+            const img = document.querySelector(`.camera-feed[data-camera-id="${cameraId}"] img`);
+            const feed = document.querySelector(`.camera-feed[data-camera-id="${cameraId}"]`);
+
+            img.style.display = 'none';
+            canvas.style.display = 'block';
+            feed.querySelector('.draw-roi-btn').style.display = 'none';
+
+            fetch(`/get_initial_frame/${cameraId}`)
+                .then(response => response.blob())
+                .then(blob => {
+                    const imgUrl = URL.createObjectURL(blob);
+                    const initialImg = new Image();
+                    initialImg.onload = () => {
+                        canvas.width = 854;
+                        canvas.height = 480;
+                        ctx.drawImage(initialImg, 0, 0, canvas.width, canvas.height);
+                        drawing = true;
+                    };
+                    initialImg.src = imgUrl;
+                })
+                .catch(error => console.error('Error fetching initial frame:', error));
+        }
+
+        document.querySelectorAll('canvas').forEach(canvas => {
+            canvas.onmousedown = (e) => {
+                if (!drawing || e.button !== 0) return;
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                points.push([x, y]);
+                drawROI(canvas.getContext('2d'), canvas);
+            };
+
+            canvas.oncontextmenu = (e) => {
+                e.preventDefault();
+                if (drawing && points.length > 2) {
+                    drawing = false;
+                    drawROI(canvas.getContext('2d'), canvas, true);
+                    saveROI(currentCameraId);
+                    resetDrawing(currentCameraId);
+                }
+            };
+        });
+
+        function drawROI(ctx, canvas, close = false) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const img = new Image();
+            img.src = `/get_initial_frame/${currentCameraId}`;
+            img.onload = () => {
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                ctx.beginPath();
+                ctx.strokeStyle = 'yellow';
+                ctx.lineWidth = 2;
+                for (let i = 0; i < points.length; i++) {
+                    const [x, y] = points[i];
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                if (close) ctx.closePath();
+                ctx.stroke();
+            };
+        }
+
+        function saveROI(cameraId) {
+            const canvasWidth = 854;
+            const canvasHeight = 480;
+            const nativeWidth = 1280;
+            const nativeHeight = 720;
+            const scaleX = nativeWidth / canvasWidth;  // 1280 / 854 ≈ 1.498
+            const scaleY = nativeHeight / canvasHeight;  // 720 / 480 = 1.5
+            const scaledPoints = points.map(([x, y]) => [
+                Math.round(x * scaleX),
+                Math.round(y * scaleY)
+            ]);
+
+            fetch(`/save_roi/${cameraId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ roi: scaledPoints })
+            })
+                .then(response => response.json())
+                .then(data => console.log(`Scaled ROI for Camera ${cameraId}:`, scaledPoints))
+                .catch(error => console.error('Error saving ROI:', error));
+        }
+
+        function resetDrawing(cameraId) {
+            const canvas = document.getElementById(`canvas-${cameraId}`);
+            const img = document.querySelector(`.camera-feed[data-camera-id="${cameraId}"] img`);
+            const btn = document.querySelector(`.camera-feed[data-camera-id="${cameraId}"] .draw-roi-btn`);
+            canvas.style.display = 'none';
+            img.style.display = 'block';
+            if (btn) btn.style.display = 'block';
+            points = [];
+        }
+    </script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!-- =========================================================================================== -->
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera Portal</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f0f0f0; margin: 0; padding: 20px; }
+        h1 { text-align: center; color: #333; }
+        .controls { text-align: center; margin-bottom: 20px; }
+        .toggle-view-btn { padding: 10px 20px; background-color: #333; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        .toggle-view-btn:hover { background-color: #555; }
+        .camera-grid { 
+            display: grid; 
+            gap: 20px; 
+            padding: 20px; 
+            margin: 0 auto; 
+            transition: all 0.3s ease;
+        }
+        .camera-grid.separate { 
+            grid-template-columns: repeat(2, 1fr); 
+            max-width: 2040px;
+        } /* Match display size */
+        .camera-grid.single { 
+            grid-template-columns: repeat(3, 1fr); 
+            max-width: 1860px;
+        } /* Match display size */
+        .camera-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .camera-title { 
+            text-align: center; 
+            padding: 10px; 
+            background-color: #333; 
+            color: white; 
+            margin: 0 0 5px 0; 
+            box-sizing: border-box;
+            border-radius: 5px 5px 0 0;
+        }
+        .camera-title.separate { width: 1000px; } /* Match display size */
+        .camera-title.single { width: 600px; } /* Match display size */
+        .camera-feed { 
+            border: 2px solid #333; 
+            border-radius: 0 0 5px 5px; 
+            overflow: hidden; 
+            background-color: #000; 
+            position: relative; 
+            box-sizing: border-box; 
+            transition: all 0.3s ease;
+        }
+        .camera-feed.separate { 
+            width: 1000px; 
+            height: 563px; 
+        } /* Match display size */
+        .camera-feed.single { 
+            width: 600px; 
+            height: 338px; 
+        } /* Match display size */
+        .camera-feed img { 
+            display: block; 
+            object-fit: contain; 
+        }
+        .camera-feed.separate img { 
+            width: 1000px; 
+            height: 563px; 
+        } /* Match display size */
+        .camera-feed.single img { 
+            width: 600px; 
+            height: 338px; 
+        } /* Match display size */
+        .draw-roi-btn { 
+            position: absolute; 
+            bottom: 10px; 
+            left: 10px; 
+            padding: 5px 10px; 
+            background-color: #333; 
+            color: white; 
+            border: none; 
+            border-radius: 3px; 
+            cursor: pointer; 
+        }
+        .draw-roi-btn:hover { background-color: #555; }
+        .pagination { text-align: center; margin-top: 20px; display: none; }
+        .pagination.active { display: block; }
+        .pagination a { padding: 10px 20px; margin: 0 10px; background-color: #333; color: white; text-decoration: none; border-radius: 5px; }
+        .pagination a:hover { background-color: #555; }
+        .pagination a.disabled { background-color: #ccc; cursor: not-allowed; }
+        .logout { text-align: center; margin-top: 20px; }
+        .logout a { padding: 10px 20px; background-color: #333; color: white; text-decoration: none; border-radius: 5px; }
+        .logout a:hover { background-color: #555; }
+        canvas { position: absolute; top: 0; left: 0; display: none; }
+        .camera-feed.separate canvas { width: 1000px; height: 563px; } /* Match display size */
+        .camera-feed.single canvas { width: 600px; height: 338px; display: none !important; } /* Match display size */
+    </style>
+</head>
+<body>
+    <h1>Camera Portal</h1>
+    <div class="controls">
+        <button class="toggle-view-btn" onclick="toggleView()">Toggle View</button>
+    </div>
+    <div class="camera-grid {{ 'single' if view_mode == 'single' else 'separate' }}">
+        {% for i in camera_indices %}
+        <div class="camera-container">
+            <h3 class="camera-title {{ 'single' if view_mode == 'single' else 'separate' }}">Camera {{ i }}</h3>
+            <div class="camera-feed {{ 'single' if view_mode == 'single' else 'separate' }}" data-camera-id="{{ i }}">
+                <img src="{{ url_for('video_feed', camera_id=i, view=view_mode) }}" alt="Camera {{ i }} Feed">
+                {% if view_mode == 'separate' %}
+                    <button class="draw-roi-btn" onclick="startDrawingROI('{{ i }}')">Draw ROI</button>
+                {% endif %}
+                <canvas id="canvas-{{ i }}"></canvas>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    <div class="pagination {{ 'active' if total_pages > 1 else '' }}">
+        {% if current_page > 1 %}
+            <a href="{{ url_for('index', page=current_page-1, view=view_mode) }}" onclick="stopStreams(event)">Previous</a>
+        {% else %}
+            <a href="#" class="disabled">Previous</a>
+        {% endif %}
+        <span>Page {{ current_page }} of {{ total_pages }}</span>
+        {% if current_page < total_pages %}
+            <a href="{{ url_for('index', page=current_page+1, view=view_mode) }}" onclick="stopStreams(event)">Next</a>
+        {% else %}
+            <a href="#" class="disabled">Next</a>
+        {% endif %}
+    </div>
+    <div class="logout">
+        <a href="{{ url_for('logout') }}">Logout</a>
+    </div>
+
+    <script>
+        let drawing = false;
+        let points = [];
+        let currentCameraId = null;
+        let initialFrame = null;  // Store the initial frame
+        const currentView = '{{ view_mode | safe }}';
+        const currentPage = {{ current_page | default(1) | safe }};
+
+        function toggleView() {
+            stopStreams(null);
+            const newView = currentView === 'separate' ? 'single' : 'separate';
+            console.log('Current View:', currentView, 'New View:', newView, 'Current Page:', currentPage);
+            const url = newView === 'single' ? '/?view=single' : `/${currentPage}?view=separate`;
+            console.log('Redirecting to:', url);
+            window.location.href = url;
+        }
+
+        function stopStreams(event) {
+            if (event) event.preventDefault();
+            const images = document.querySelectorAll('.camera-feed img');
+            images.forEach(img => { img.src = ''; });
+            if (event) {
+                setTimeout(() => { window.location.href = event.target.href; }, 100);
+            }
+        }
+
+        function startDrawingROI(cameraId) {
+            if (currentView !== 'separate') return;
+            currentCameraId = cameraId;
+            const canvas = document.getElementById(`canvas-${cameraId}`);
+            const ctx = canvas.getContext('2d');
+            const img = document.querySelector(`.camera-feed[data-camera-id="${cameraId}"] img`);
+            const feed = document.querySelector(`.camera-feed[data-camera-id="${cameraId}"]`);
+
+            img.style.display = 'none';
+            canvas.style.display = 'block';
+            feed.querySelector('.draw-roi-btn').style.display = 'none';
+
+            fetch(`/get_initial_frame/${cameraId}`)
+                .then(response => response.blob())
+                .then(blob => {
+                    const imgUrl = URL.createObjectURL(blob);
+                    initialFrame = new Image();
+                    initialFrame.onload = () => {
+                        canvas.width = 1000;  // Match display size
+                        canvas.height = 563;  // Match display size
+                        ctx.drawImage(initialFrame, 0, 0, canvas.width, canvas.height);
+                        drawing = true;
+                    };
+                    initialFrame.src = imgUrl;
+                })
+                .catch(error => console.error('Error fetching initial frame:', error));
+        }
+
+        document.querySelectorAll('canvas').forEach(canvas => {
+            canvas.onmousedown = (e) => {
+                if (!drawing || e.button !== 0) return;
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                points.push([x, y]);
+                drawROI(canvas.getContext('2d'), canvas);
+            };
+
+            canvas.oncontextmenu = (e) => {
+                e.preventDefault();
+                if (drawing && points.length > 2) {
+                    drawing = false;
+                    drawROI(canvas.getContext('2d'), canvas, true);
+                    saveROI(currentCameraId);
+                    resetDrawing(currentCameraId);
+                }
+            };
+        });
+
+        function drawROI(ctx, canvas, close = false) {
+            if (!initialFrame) return;  // Wait until initial frame is loaded
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(initialFrame, 0, 0, canvas.width, canvas.height);
+            
+            // Draw edges
+            ctx.beginPath();
+            ctx.strokeStyle = 'yellow';
+            ctx.lineWidth = 2;
+            for (let i = 0; i < points.length; i++) {
+                const [x, y] = points[i];
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            if (close) ctx.closePath();
+            ctx.stroke();
+
+            // Draw points
+            ctx.fillStyle = 'red';
+            points.forEach(([x, y]) => {
+                ctx.beginPath();
+                ctx.arc(x, y, 5, 0, 2 * Math.PI);
+                ctx.fill();
+            });
+        }
+
+        function saveROI(cameraId) {
+            const canvasWidth = 1000;  // Match display size
+            const canvasHeight = 563;  // Match display size
+            const nativeWidth = 1280;  // Match display size
+            const nativeHeight = 720;  // Match display size
+            const scaleX = nativeWidth / canvasWidth;
+            const scaleY = nativeHeight / canvasHeight;
+            const scaledPoints = points.map(([x, y]) => [
+                Math.round(x * scaleX),
+                Math.round(y * scaleY)
+            ]);
+
+            fetch(`/save_roi/${cameraId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ roi: scaledPoints })
+            })
+                .then(response => response.json())
+                .then(data => console.log(`Scaled ROI for Camera ${cameraId}:`, scaledPoints))
+                .catch(error => console.error('Error saving ROI:', error));
+        }
+
+        function resetDrawing(cameraId) {
+            const canvas = document.getElementById(`canvas-${cameraId}`);
+            const img = document.querySelector(`.camera-feed[data-camera-id="${cameraId}"] img`);
+            const btn = document.querySelector(`.camera-feed[data-camera-id="${cameraId}"] .draw-roi-btn`);
+            canvas.style.display = 'none';
+            img.style.display = 'block';
+            if (btn) btn.style.display = 'block';
+            points = [];
+            initialFrame = null;  // Clear the stored image
+        }
+    </script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!-- =========================================================================================== -->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera Portal</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f0f0f0; margin: 0; padding: 20px; }
+        h1 { text-align: center; color: #333; }
+        .controls { text-align: center; margin-bottom: 20px; }
+        .toggle-view-btn, .database-btn { 
+            padding: 10px 20px; 
+            background-color: #333; 
+            color: white; 
+            border: none; 
+            border-radius: 5px; 
+            cursor: pointer; 
+            margin: 0 10px;
+        }
+        .toggle-view-btn:hover, .database-btn:hover { background-color: #555; }
+        .dropdown { 
+            position: relative; 
+            display: inline-block; 
+        }
+        .dropdown-content { 
+            display: none; 
+            position: absolute; 
+            background-color: #f9f9f9; 
+            min-width: 160px; 
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2); 
+            z-index: 1; 
+            border-radius: 5px;
+            left: 0;
+        }
+        .dropdown-content a, .nested-dropdown span { 
+            color: black; 
+            padding: 12px 16px; 
+            text-decoration: none; 
+            display: block; 
+            cursor: pointer;
+        }
+        .dropdown-content a:hover, .nested-dropdown span:hover { background-color: #f1f1f1; }
+        .dropdown:hover .dropdown-content { display: block; }
+        .nested-dropdown { position: relative; }
+        .nested-content { 
+            display: none; 
+            position: absolute; 
+            background-color: #f9f9f9; 
+            min-width: 160px; 
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2); 
+            z-index: 1; 
+            border-radius: 5px;
+            left: 100%;
+            top: 0;
+        }
+        .nested-dropdown:hover .nested-content { display: block; }
+        .camera-grid { 
+            display: grid; 
+            gap: 20px; 
+            padding: 20px; 
+            margin: 0 auto; 
+            transition: all 0.3s ease;
+        }
+        .camera-grid.separate { 
+            grid-template-columns: repeat(2, 1fr); 
+            max-width: 2040px;
+        }
+        .camera-grid.single { 
+            grid-template-columns: repeat(3, 1fr); 
+            max-width: 1860px;
+        }
+        .camera-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .camera-title { 
+            text-align: center; 
+            padding: 10px; 
+            background-color: #333; 
+            color: white; 
+            margin: 0 0 5px 0; 
+            box-sizing: border-box;
+            border-radius: 5px 5px 0 0;
+        }
+        .camera-title.separate { width: 1000px; }
+        .camera-title.single { width: 600px; }
+        .camera-feed { 
+            border: 2px solid #333; 
+            border-radius: 0 0 5px 5px; 
+            overflow: hidden; 
+            background-color: #000; 
+            position: relative; 
+            box-sizing: border-box; 
+            transition: all 0.3s ease;
+        }
+        .camera-feed.separate { 
+            width: 1000px; 
+            height: 563px; 
+        }
+        .camera-feed.single { 
+            width: 600px; 
+            height: 338px; 
+        }
+        .camera-feed img { 
+            display: block; 
+            object-fit: contain; 
+        }
+        .camera-feed.separate img { 
+            width: 1000px; 
+            height: 563px; 
+        }
+        .camera-feed.single img { 
+            width: 600px; 
+            height: 338px; 
+        }
+        .draw-roi-btn { 
+            position: absolute; 
+            bottom: 10px; 
+            left: 10px; 
+            padding: 5px 10px; 
+            background-color: #333; 
+            color: white; 
+            border: none; 
+            border-radius: 3px; 
+            cursor: pointer; 
+        }
+        .draw-roi-btn:hover { background-color: #555; }
+        .pagination { text-align: center; margin-top: 20px; display: none; }
+        .pagination.active { display: block; }
+        .pagination a { padding: 10px 20px; margin: 0 10px; background-color: #333; color: white; text-decoration: none; border-radius: 5px; }
+        .pagination a:hover { background-color: #555; }
+        .pagination a.disabled { background-color: #ccc; cursor: not-allowed; }
+        .logout { text-align: center; margin-top: 20px; }
+        .logout a { padding: 10px 20px; background-color: #333; color: white; text-decoration: none; border-radius: 5px; }
+        .logout a:hover { background-color: #555; }
+        canvas { position: absolute; top: 0; left: 0; display: none; }
+        .camera-feed.separate canvas { width: 1000px; height: 563px; }
+        .camera-feed.single canvas { width: 600px; height: 338px; display: none !important; }
+    </style>
+</head>
+<body>
+    <h1>Camera Portal</h1>
+    <div class="controls">
+        <button class="toggle-view-btn" onclick="toggleView()">Toggle View</button>
+        <div class="dropdown">
+            <button class="database-btn">Database</button>
+            <div class="dropdown-content">
+                <div class="nested-dropdown">
+                    <span>Add Person</span>
+                    <div class="nested-content">
+                        <a href="#" onclick="addPerson('static')">Static Addition</a>
+                        <a href="#" onclick="addPerson('dynamic')">Dynamic Addition</a>
+                    </div>
+                </div>
+                <div class="nested-dropdown">
+                    <span>Remove Person</span>
+                    <div class="nested-content" id="remove-person-list">
+                        {% if persons|length == 0 %}
+                            <span>No persons in database</span>
+                        {% else %}
+                            {% for person in persons %}
+                                <a href="#" onclick="removePerson('{{ person }}')">{{ person }}</a>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                </div>
+                <a href="#" onclick="clearDatabase()">Clear Database</a>
+            </div>
+        </div>
+    </div>
+    <div class="camera-grid {{ 'single' if view_mode == 'single' else 'separate' }}">
+        {% for i in camera_indices %}
+        <div class="camera-container">
+            <h3 class="camera-title {{ 'single' if view_mode == 'single' else 'separate' }}">Camera {{ i }}</h3>
+            <div class="camera-feed {{ 'single' if view_mode == 'single' else 'separate' }}" data-camera-id="{{ i }}">
+                <img src="{{ url_for('video_feed', camera_id=i, view=view_mode) }}" alt="Camera {{ i }} Feed">
+                {% if view_mode == 'separate' %}
+                    <button class="draw-roi-btn" onclick="startDrawingROI('{{ i }}')">Draw ROI</button>
+                {% endif %}
+                <canvas id="canvas-{{ i }}"></canvas>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    <div class="pagination {{ 'active' if total_pages > 1 else '' }}">
+        {% if current_page > 1 %}
+            <a href="{{ url_for('index', page=current_page-1, view=view_mode) }}" onclick="stopStreams(event)">Previous</a>
+        {% else %}
+            <a href="#" class="disabled">Previous</a>
+        {% endif %}
+        <span>Page {{ current_page }} of {{ total_pages }}</span>
+        {% if current_page < total_pages %}
+            <a href="{{ url_for('index', page=current_page+1, view=view_mode) }}" onclick="stopStreams(event)">Next</a>
+        {% else %}
+            <a href="#" class="disabled">Next</a>
+        {% endif %}
+    </div>
+    <div class="logout">
+        <a href="{{ url_for('logout') }}">Logout</a>
+    </div>
+
+    <script>
+        let drawing = false;
+        let points = [];
+        let currentCameraId = null;
+        let initialFrame = null;
+        const currentView = '{{ view_mode | safe }}';
+        const currentPage = '{{ current_page | default(1) | safe }}';
+
+        function toggleView() {
+            stopStreams(null);
+            const newView = currentView === 'separate' ? 'single' : 'separate';
+            console.log('Current View:', currentView, 'New View:', newView, 'Current Page:', currentPage);
+            const url = newView === 'single' ? '/?view=single' : `/${currentPage}?view=separate`;
+            console.log('Redirecting to:', url);
+            window.location.href = url;
+        }
+
+        function stopStreams(event) {
+            if (event) event.preventDefault();
+            const images = document.querySelectorAll('.camera-feed img');
+            images.forEach(img => { img.src = ''; });
+            if (event) {
+                setTimeout(() => { window.location.href = event.target.href; }, 100);
+            }
+        }
+
+        function startDrawingROI(cameraId) {
+            if (currentView !== 'separate') return;
+            currentCameraId = cameraId;
+            const canvas = document.getElementById(`canvas-${cameraId}`);
+            const ctx = canvas.getContext('2d');
+            const img = document.querySelector(`.camera-feed[data-camera-id="${cameraId}"] img`);
+            const feed = document.querySelector(`.camera-feed[data-camera-id="${cameraId}"]`);
+
+            img.style.display = 'none';
+            canvas.style.display = 'block';
+            feed.querySelector('.draw-roi-btn').style.display = 'none';
+
+            fetch(`/get_initial_frame/${cameraId}`)
+                .then(response => response.blob())
+                .then(blob => {
+                    const imgUrl = URL.createObjectURL(blob);
+                    initialFrame = new Image();
+                    initialFrame.onload = () => {
+                        canvas.width = 1000;
+                        canvas.height = 563;
+                        ctx.drawImage(initialFrame, 0, 0, canvas.width, canvas.height);
+                        drawing = true;
+                    };
+                    initialFrame.src = imgUrl;
+                })
+                .catch(error => console.error('Error fetching initial frame:', error));
+        }
+
+        document.querySelectorAll('canvas').forEach(canvas => {
+            canvas.onmousedown = (e) => {
+                if (!drawing || e.button !== 0) return;
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                points.push([x, y]);
+                drawROI(canvas.getContext('2d'), canvas);
+            };
+
+            canvas.oncontextmenu = (e) => {
+                e.preventDefault();
+                if (drawing && points.length > 2) {
+                    drawing = false;
+                    drawROI(canvas.getContext('2d'), canvas, true);
+                    saveROI(currentCameraId);
+                    resetDrawing(currentCameraId);
+                }
+            };
+        });
+
+        function drawROI(ctx, canvas, close = false) {
+            if (!initialFrame) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(initialFrame, 0, 0, canvas.width, canvas.height);
+            
+            ctx.beginPath();
+            ctx.strokeStyle = 'yellow';
+            ctx.lineWidth = 2;
+            for (let i = 0; i < points.length; i++) {
+                const [x, y] = points[i];
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            if (close) ctx.closePath();
+            ctx.stroke();
+
+            ctx.fillStyle = 'red';
+            points.forEach(([x, y]) => {
+                ctx.beginPath();
+                ctx.arc(x, y, 5, 0, 2 * Math.PI);
+                ctx.fill();
+            });
+        }
+
+        function saveROI(cameraId) {
+            const canvasWidth = 1000;
+            const canvasHeight = 563;
+            const nativeWidth = 1280;
+            const nativeHeight = 720;
+            const scaleX = nativeWidth / canvasWidth;
+            const scaleY = nativeHeight / canvasHeight;
+            const scaledPoints = points.map(([x, y]) => [
+                Math.round(x * scaleX),
+                Math.round(y * scaleY)
+            ]);
+
+            fetch(`/save_roi/${cameraId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ roi: scaledPoints })
+            })
+                .then(response => response.json())
+                .then(data => console.log(`Scaled ROI for Camera ${cameraId}:`, scaledPoints))
+                .catch(error => console.error('Error saving ROI:', error));
+        }
+
+        function resetDrawing(cameraId) {
+            const canvas = document.getElementById(`canvas-${cameraId}`);
+            const img = document.querySelector(`.camera-feed[data-camera-id="${cameraId}"] img`);
+            const btn = document.querySelector(`.camera-feed[data-camera-id="${cameraId}"] .draw-roi-btn`);
+            canvas.style.display = 'none';
+            img.style.display = 'block';
+            if (btn) btn.style.display = 'block';
+            points = [];
+            initialFrame = null;
+        }
+
+        // Database functions
+        function addPerson(type) {
+            const name = prompt(`Enter name for ${type} addition:`);
+            if (name) {
+                fetch('/add_person', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: type, name: name })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    alert(data.message);
+                    // Optionally refresh the person list dynamically here if needed
+                    window.location.reload(); // For now, reload to update the list
+                })
+                .catch(error => console.error('Error adding person:', error));
+            }
+        }
+
+        function removePerson(name) {
+            if (confirm(`Are you sure you want to remove ${name}?`)) {
+                // Optimistically remove the person from the UI first
+                const list = document.getElementById('remove-person-list');
+                const personLinks = list.getElementsByTagName('a');
+                let removedElement = null;
+                for (let i = 0; i < personLinks.length; i++) {
+                    if (personLinks[i].textContent === name) {
+                        removedElement = personLinks[i];
+                        list.removeChild(removedElement);
+                        break;
+                    }
+                }
+                // If the list is now empty, show "No persons in database"
+                if (list.children.length === 0) {
+                    list.innerHTML = '<span>No persons in database</span>';
+                }
+
+                // Send the removal request to the server
+                fetch('/remove_person', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    // alert(data.message); // Show success message
+                    // No need to reload here; the UI is already updated
+                })
+                .catch(error => {
+                    console.error('Error removing person:', error);
+                    alert('Failed to remove person from server');
+                    // Revert the UI change if the server request fails
+                    if (removedElement) {
+                        list.appendChild(removedElement);
+                        if (list.children[0].tagName === 'SPAN') {
+                            list.removeChild(list.children[0]); // Remove "No persons" message
+                        }
+                    }
+                });
+            }
+        }
+
+        function clearDatabase() {
+            if (confirm('Are you sure you want to clear the entire database?')) {
+                // Optimistically clear the UI first
+                const list = document.getElementById('remove-person-list');
+                let originalContent = list.innerHTML; // Store original content for rollback
+                list.innerHTML = '<span>No persons in database</span>';
+
+                // Send the clear request to the server
+                fetch('/clear_database', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    // alert(data.message); // Show success message
+                    // No alert here; clearing happens silently
+                })
+                .catch(error => {
+                    console.error('Error clearing database:', error);
+                    alert('Failed to clear database on server');
+                    // Revert the UI change if the server request fails
+                    list.innerHTML = originalContent;
+                });
+            }
+        }
+
+    </script>
+</body>
+</html>
+
+
+
+
+
+
+<!-- -------------------------------------------------------------------------------------------------------------- -->
+
+
+
+
+
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera Portal</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f0f0f0; margin: 0; padding: 20px; }
+        h1 { text-align: center; color: #333; }
+        .controls { text-align: center; margin-bottom: 20px; }
+        .toggle-view-btn, .database-btn { 
+            padding: 10px 20px; 
+            background-color: #333; 
+            color: white; 
+            border: none; 
+            border-radius: 5px; 
+            cursor: pointer; 
+            margin: 0 10px;
+        }
+        .toggle-view-btn:hover, .database-btn:hover { background-color: #555; }
+        .dropdown { 
+            position: relative; 
+            display: inline-block; 
+        }
+        .dropdown-content { 
+            display: none; 
+            position: absolute; 
+            background-color: #f9f9f9; 
+            min-width: 160px; 
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2); 
+            z-index: 1; 
+            border-radius: 5px;
+            left: 0;
+        }
+        .dropdown-content a, .nested-dropdown span { 
+            color: black; 
+            padding: 12px 16px; 
+            text-decoration: none; 
+            display: block; 
+            cursor: pointer;
+        }
+        .dropdown-content a:hover, .nested-dropdown span:hover { background-color: #f1f1f1; }
+        .dropdown:hover .dropdown-content { display: block; }
+        .nested-dropdown { position: relative; }
+        .nested-content { 
+            display: none; 
+            position: absolute; 
+            background-color: #f9f9f9; 
+            min-width: 160px; 
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2); 
+            z-index: 1; 
+            border-radius: 5px;
+            left: 100%;
+            top: 0;
+        }
+        .nested-dropdown:hover .nested-content { display: block; }
+        .camera-grid { 
+            display: grid; 
+            gap: 20px; 
+            padding: 20px; 
+            margin: 0 auto; 
+            transition: all 0.3s ease;
+        }
+        .camera-grid.separate { 
+            grid-template-columns: repeat(2, 1fr); 
+            max-width: 2040px;
+        }
+        .camera-grid.single { 
+            grid-template-columns: repeat(3, 1fr); 
+            max-width: 1860px;
+        }
+        .camera-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .camera-title { 
+            text-align: center; 
+            padding: 10px; 
+            background-color: #333; 
+            color: white; 
+            margin: 0 0 5px 0; 
+            box-sizing: border-box;
+            border-radius: 5px 5px 0 0;
+        }
+        .camera-title.separate { width: 1000px; }
+        .camera-title.single { width: 600px; }
+        .camera-feed { 
+            border: 2px solid #333; 
+            border-radius: 0 0 5px 5px; 
+            overflow: hidden; 
+            background-color: #000; 
+            position: relative; 
+            box-sizing: border-box; 
+            transition: all 0.3s ease;
+        }
+        .camera-feed.separate { 
+            width: 1000px; 
+            height: 563px; 
+        }
+        .camera-feed.single { 
+            width: 600px; 
+            height: 338px; 
+        }
+        .camera-feed img { 
+            display: block; 
+            object-fit: contain; 
+        }
+        .camera-feed.separate img { 
+            width: 1000px; 
+            height: 563px; 
+        }
+        .camera-feed.single img { 
+            width: 600px; 
+            height: 338px; 
+        }
+        .draw-roi-btn { 
+            position: absolute; 
+            bottom: 10px; 
+            left: 10px; 
+            padding: 5px 10px; 
+            background-color: #333; 
+            color: white; 
+            border: none; 
+            border-radius: 3px; 
+            cursor: pointer; 
+        }
+        .draw-roi-btn:hover { background-color: #555; }
+        .pagination { text-align: center; margin-top: 20px; display: none; }
+        .pagination.active { display: block; }
+        .pagination a { padding: 10px 20px; margin: 0 10px; background-color: #333; color: white; text-decoration: none; border-radius: 5px; }
+        .pagination a:hover { background-color: #555; }
+        .pagination a.disabled { background-color: #ccc; cursor: not-allowed; }
+        .logout { text-align: center; margin-top: 20px; }
+        .logout a { padding: 10px 20px; background-color: #333; color: white; text-decoration: none; border-radius: 5px; }
+        .logout a:hover { background-color: #555; }
+        canvas { position: absolute; top: 0; left: 0; display: none; }
+        .camera-feed.separate canvas { width: 1000px; height: 563px; }
+        .camera-feed.single canvas { width: 600px; height: 338px; display: none !important; }
+
+        .custom-dialog {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.3);
+            z-index: 1000;
+            max-width: 400px;
+            width: 90%;
+        }
+        .custom-dialog-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 999;
+        }
+        .camera-list {
+            max-height: 150px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            margin: 10px 0;
+            padding: 5px;
+        }
+        .camera-option {
+            padding: 5px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .camera-option.selected {
+            background-color: #e0e0e0;
+        }
+        .camera-option.disabled {
+            color: #888;
+            cursor: not-allowed;
+        }
+        .tick {
+            color: green;
+            font-weight: bold;
+        }
+        .custom-dialog button {
+            padding: 5px 15px;
+            margin: 5px;
+            background-color: #333;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .custom-dialog button:hover {
+            background-color: #555;
+        }
+        .checkbox-container {
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Camera Portal</h1>
+
+    <div class="controls">
+        <button class="toggle-view-btn" onclick="toggleView()">Toggle View</button>
+        {% if view_mode == 'separate' %}
+            <div class="dropdown">
+                <button class="database-btn">Database</button>
+                <div class="dropdown-content">
+                    <div class="nested-dropdown">
+                        <span>Add Person</span>
+                        <div class="nested-content">
+                            <a href="#" onclick="addPerson('static')">Static Addition</a>
+                            <a href="#" onclick="addPerson('dynamic')">Dynamic Addition</a>
+                        </div>
+                    </div>
+                    <div class="nested-dropdown">
+                        <span>Remove Person</span>
+                        <div class="nested-content" id="remove-person-list">
+                            {% if persons|length == 0 %}
+                                <span>No persons in database</span>
+                            {% else %}
+                                {% for person in persons %}
+                                    <a href="#" onclick="removePerson('{{ person }}')">{{ person }}</a>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+                    </div>
+                    <a href="#" onclick="clearDatabase()">Clear Database</a>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+
+    <div class="camera-grid {{ 'single' if view_mode == 'single' else 'separate' }}">
+        {% for i in camera_indices %}
+        <div class="camera-container">
+            <h3 class="camera-title {{ 'single' if view_mode == 'single' else 'separate' }}">Camera {{ i }}</h3>
+            <div class="camera-feed {{ 'single' if view_mode == 'single' else 'separate' }}" data-camera-id="{{ i }}">
+                <img src="{{ url_for('video_feed', camera_id=i, view=view_mode) }}" alt="Camera {{ i }} Feed">
+                {% if view_mode == 'separate' %}
+                    <button class="draw-roi-btn" onclick="startDrawingROI('{{ i }}')">Draw ROI</button>
+                {% endif %}
+                <canvas id="canvas-{{ i }}"></canvas>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="pagination {{ 'active' if total_pages > 1 else '' }}">
+        {% if current_page > 1 %}
+            <a href="{{ url_for('index', page=current_page-1, view=view_mode) }}" onclick="stopStreams(event)">Previous</a>
+        {% else %}
+            <a href="#" class="disabled">Previous</a>
+        {% endif %}
+        <span>Page {{ current_page }} of {{ total_pages }}</span>
+        {% if current_page < total_pages %}
+            <a href="{{ url_for('index', page=current_page+1, view=view_mode) }}" onclick="stopStreams(event)">Next</a>
+        {% else %}
+            <a href="#" class="disabled">Next</a>
+        {% endif %}
+    </div>
+
+    <div class="logout">
+        <a href="{{ url_for('logout') }}">Logout</a>
+    </div>
+
+    <script>
+        let drawing = false;
+        let points = [];
+        let currentCameraId = null;
+        let initialFrame = null;
+        const currentView = '{{ view_mode | safe }}';
+        const currentPage = {{ current_page | default(1) | safe }};
+        const activeCameras = {{ active_cameras | tojson | safe }};
+
+        function toggleView() {
+            stopStreams(null);
+            const newView = currentView === 'separate' ? 'single' : 'separate';
+            console.log('Current View:', currentView, 'New View:', newView, 'Current Page:', currentPage);
+            const url = newView === 'single' ? '/?view=single' : `/${currentPage}?view=separate`;
+            console.log('Redirecting to:', url);
+            window.location.href = url;
+        }
+
+        function stopStreams(event) {
+            if (event) event.preventDefault();
+            const images = document.querySelectorAll('.camera-feed img');
+            images.forEach(img => { img.src = ''; });
+            if (event) {
+                setTimeout(() => { window.location.href = event.target.href; }, 100);
+            }
+        }
+
+        function startDrawingROI(cameraId) {
+            if (currentView !== 'separate') return;
+            currentCameraId = cameraId;
+            const canvas = document.getElementById(`canvas-${cameraId}`);
+            const ctx = canvas.getContext('2d');
+            const img = document.querySelector(`.camera-feed[data-camera-id="${cameraId}"] img`);
+            const feed = document.querySelector(`.camera-feed[data-camera-id="${cameraId}"]`);
+
+            img.style.display = 'none';
+            canvas.style.display = 'block';
+            feed.querySelector('.draw-roi-btn').style.display = 'none';
+
+            fetch(`/get_initial_frame/${cameraId}`)
+                .then(response => response.blob())
+                .then(blob => {
+                    const imgUrl = URL.createObjectURL(blob);
+                    initialFrame = new Image();
+                    initialFrame.onload = () => {
+                        canvas.width = 1000;
+                        canvas.height = 563;
+                        ctx.drawImage(initialFrame, 0, 0, canvas.width, canvas.height);
+                        drawing = true;
+                    };
+                    initialFrame.src = imgUrl;
+                })
+                .catch(error => console.error('Error fetching initial frame:', error));
+        }
+
+        document.querySelectorAll('canvas').forEach(canvas => {
+            canvas.onmousedown = (e) => {
+                if (!drawing || e.button !== 0) return;
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                points.push([x, y]);
+                drawROI(canvas.getContext('2d'), canvas);
+            };
+
+            canvas.oncontextmenu = (e) => {
+                e.preventDefault();
+                if (drawing && points.length > 2) {
+                    drawing = false;
+                    drawROI(canvas.getContext('2d'), canvas, true);
+                    saveROI(currentCameraId);
+                    resetDrawing(currentCameraId);
+                }
+            };
+        });
+
+        function drawROI(ctx, canvas, close = false) {
+            if (!initialFrame) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(initialFrame, 0, 0, canvas.width, canvas.height);
+            
+            ctx.beginPath();
+            ctx.strokeStyle = 'yellow';
+            ctx.lineWidth = 2;
+            for (let i = 0; i < points.length; i++) {
+                const [x, y] = points[i];
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            if (close) ctx.closePath();
+            ctx.stroke();
+
+            ctx.fillStyle = 'red';
+            points.forEach(([x, y]) => {
+                ctx.beginPath();
+                ctx.arc(x, y, 5, 0, 2 * Math.PI);
+                ctx.fill();
+            });
+        }
+
+        function saveROI(cameraId) {
+            const canvasWidth = 1000;
+            const canvasHeight = 563;
+            const nativeWidth = 1280;
+            const nativeHeight = 720;
+            const scaleX = nativeWidth / canvasWidth;
+            const scaleY = nativeHeight / canvasHeight;
+            const scaledPoints = points.map(([x, y]) => [
+                Math.round(x * scaleX),
+                Math.round(y * scaleY)
+            ]);
+
+            fetch(`/save_roi/${cameraId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ roi: scaledPoints })
+            })
+                .then(response => response.json())
+                .then(data => console.log(`Scaled ROI for Camera ${cameraId}:`, scaledPoints))
+                .catch(error => console.error('Error saving ROI:', error));
+        }
+
+        function resetDrawing(cameraId) {
+            const canvas = document.getElementById(`canvas-${cameraId}`);
+            const img = document.querySelector(`.camera-feed[data-camera-id="${cameraId}"] img`);
+            const btn = document.querySelector(`.camera-feed[data-camera-id="${cameraId}"] .draw-roi-btn`);
+            canvas.style.display = 'none';
+            img.style.display = 'block';
+            if (btn) btn.style.display = 'block';
+            points = [];
+            initialFrame = null;
+        }
+
+        // Database functions
+        function addPerson(type) {
+            if (type === 'static') {
+                const overlay = document.createElement('div');
+                overlay.className = 'custom-dialog-overlay';
+                document.body.appendChild(overlay);
+
+                const dialog = document.createElement('div');
+                dialog.className = 'custom-dialog';
+                dialog.innerHTML = `
+                    <p>Please select the cameras that you would like to capture the staff in static mode:</p>
+                    <div class="camera-list" id="camera-list">
+                        ${activeCameras.map(i => `
+                            <div class="camera-option" data-camera-id="${i}" onclick="toggleCameraSelection(this)">
+                                Camera ${i} <span class="tick" style="display: none;">✔</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="checkbox-container">
+                        <label><input type="checkbox" id="use-defaults" onclick="toggleDefaults(this)"> Use Defaults</label>
+                    </div>
+                    <div>
+                        <button onclick="continueStaticAdd(this)">Continue</button>
+                        <button onclick="cancelDialog(this)">Cancel</button>
+                    </div>
+                `;
+                document.body.appendChild(dialog);
+            } else if (type === 'dynamic') {
+                const name = prompt(`Enter name for ${type} addition:`);
+                if (name) {
+                    fetch('/add_person', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ type: type, name: name })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        alert(data.message);
+                        updatePersonList(name);
+                    })
+                    .catch(error => console.error('Error adding person:', error));
+                }
+            }
+        }
+
+        function toggleCameraSelection(option) {
+            if (option.classList.contains('disabled')) return;
+            const isSelected = option.classList.contains('selected');
+            option.classList.toggle('selected', !isSelected);
+            const tick = option.querySelector('.tick');
+            tick.style.display = isSelected ? 'none' : 'inline';
+        }
+
+        function toggleDefaults(checkbox) {
+            const cameraList = document.getElementById('camera-list');
+            const options = cameraList.getElementsByClassName('camera-option');
+            const defaultCameras = [0, 1, 2, 3]; // Hardcoded default cameras
+
+            if (checkbox.checked) {
+                Array.from(options).forEach(option => {
+                    const cameraId = parseInt(option.dataset.cameraId);
+                    option.classList.toggle('selected', defaultCameras.includes(cameraId));
+                    option.classList.add('disabled');
+                    const tick = option.querySelector('.tick');
+                    tick.style.display = defaultCameras.includes(cameraId) ? 'inline' : 'none';
+                });
+            } else {
+                Array.from(options).forEach(option => {
+                    option.classList.remove('selected');
+                    option.classList.remove('disabled');
+                    const tick = option.querySelector('.tick');
+                    tick.style.display = 'none';
+                });
+            }
+        }
+
+        function continueStaticAdd(button) {
+            const dialog = button.closest('.custom-dialog');
+            const useDefaults = dialog.querySelector('#use-defaults').checked;
+            const defaultCameras = [0, 1, 2, 3]; // Hardcoded default cameras
+            let selectedCameras;
+
+            if (useDefaults) {
+                selectedCameras = defaultCameras;
+            } else {
+                const options = dialog.querySelectorAll('.camera-option.selected');
+                selectedCameras = Array.from(options).map(option => parseInt(option.dataset.cameraId));
+                if (selectedCameras.length === 0) {
+                    alert('Please select at least one camera.');
+                    return;
+                }
+            }
+
+            const name = prompt('Enter the name of the person:');
+            if (name) {
+                // Redirect to capture_static page in the same window
+                const cameraParam = selectedCameras.slice(0, 4).join(',');
+                window.location.href = `/capture_static?name=${encodeURIComponent(name)}&cameras=${cameraParam}`;
+            }
+            cancelDialog(button);
+        }
+        
+        function cancelDialog(button) {
+            const dialog = button.closest('.custom-dialog');
+            const overlay = document.querySelector('.custom-dialog-overlay');
+            if (dialog) document.body.removeChild(dialog);
+            if (overlay) document.body.removeChild(overlay);
+        }
+
+        function updatePersonList(name) {
+            const list = document.getElementById('remove-person-list');
+            if (list.children[0].tagName === 'SPAN') list.innerHTML = '';
+            const a = document.createElement('a');
+            a.href = '#';
+            a.textContent = name;
+            a.onclick = () => removePerson(name);
+            list.appendChild(a);
+        }
+
+        function removePerson(name) {
+            if (confirm(`Are you sure you want to remove ${name}?`)) {
+                const list = document.getElementById('remove-person-list');
+                const personLinks = list.getElementsByTagName('a');
+                let removedElement = null;
+                for (let i = 0; i < personLinks.length; i++) {
+                    if (personLinks[i].textContent === name) {
+                        removedElement = personLinks[i];
+                        list.removeChild(removedElement);
+                        break;
+                    }
+                }
+                if (list.children.length === 0) {
+                    list.innerHTML = '<span>No persons in database</span>';
+                }
+                fetch('/remove_person', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name })
+                })
+                .then(response => response.json())
+                .then(data => {})
+                .catch(error => {
+                    console.error('Error removing person:', error);
+                    alert('Failed to remove person from server');
+                    if (removedElement) {
+                        list.appendChild(removedElement);
+                        if (list.children[0].tagName === 'SPAN') {
+                            list.removeChild(list.children[0]);
+                        }
+                    }
+                });
+            }
+        }
+
+        function clearDatabase() {
+            if (confirm('Are you sure you want to clear the entire database?')) {
+                const list = document.getElementById('remove-person-list');
+                let originalContent = list.innerHTML;
+                list.innerHTML = '<span>No persons in database</span>';
+                fetch('/clear_database', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                })
+                .then(response => response.json())
+                .then(data => {})
+                .catch(error => {
+                    console.error('Error clearing database:', error);
+                    alert('Failed to clear database on server');
+                    list.innerHTML = originalContent;
+                });
+            }
+        }
+
+    </script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+<!-- -------------------------------------------------------------------------------------------------------------- -->
+
+

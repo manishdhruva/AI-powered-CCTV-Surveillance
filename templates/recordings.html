@@ -1,0 +1,614 @@
+<!-- <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recordings - AI SmartVision</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            background-image: url('/static/bg10.jpg');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+            margin: 0; 
+            padding: 20px; 
+        }
+        h1 { 
+            text-align: center; 
+            color: #333; 
+            margin-bottom: 20px;
+        }
+        .controls {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .back-btn, .download-btn {
+            padding: 10px 20px;
+            background-color: #333;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 0 10px;
+            text-decoration: none;
+        }
+        .back-btn:hover, .download-btn:hover {
+            background-color: #555;
+        }
+        .recordings-table {
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            border-collapse: collapse;
+            background-color: white;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        .recordings-table th, .recordings-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        .recordings-table th {
+            background-color: #333;
+            color: white;
+        }
+        .recordings-table tr:hover {
+            background-color: #f5f5f5;
+        }
+        .recordings-table input[type="checkbox"] {
+            cursor: pointer;
+        }
+        .no-recordings {
+            text-align: center;
+            padding: 20px;
+            background-color: white;
+            border-radius: 5px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        /* Media Queries for Mobile Responsiveness */
+        @media (max-width: 768px) {
+            .recordings-table {
+                font-size: 14px;
+            }
+            .recordings-table th, .recordings-table td {
+                padding: 8px;
+            }
+            .back-btn, .download-btn {
+                padding: 8px 16px;
+                margin: 5px;
+            }
+            .controls {
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Recordings</h1>
+
+    <div class="controls">
+        <a href="{{ url_for('index') }}" class="back-btn">Back</a>
+        <button class="download-btn" onclick="downloadSelected()">Download Selected</button>
+    </div>
+
+    {% if recordings %}
+        <table class="recordings-table">
+            <thead>
+                <tr>
+                    <th><input type="checkbox" id="select-all" onclick="toggleSelectAll()"></th>
+                    <th>File Name</th>
+                    <th>Camera</th>
+                    <th>Date</th>
+                    <th>Timestamp</th>
+                    <th>Size (MB)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for rec in recordings %}
+                    <tr>
+                        <td><input type="checkbox" class="recording-checkbox" data-key="{{ rec.key }}"></td>
+                        <td>{{ rec.file_name }}</td>
+                        <td>{{ rec.camera }}</td>
+                        <td>{{ rec.date }}</td>
+                        <td>{{ rec.timestamp }}</td>
+                        <td>{{ rec.size_mb }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <div class="no-recordings">
+            No recordings found in the S3 bucket.
+        </div>
+    {% endif %}
+
+    <script>
+        function toggleSelectAll() {
+            const selectAll = document.getElementById('select-all');
+            const checkboxes = document.querySelectorAll('.recording-checkbox');
+            checkboxes.forEach(cb => cb.checked = selectAll.checked);
+        }
+
+        function downloadSelected() {
+            const checkboxes = document.querySelectorAll('.recording-checkbox:checked');
+            if (checkboxes.length === 0) {
+                alert('Please select at least one recording to download.');
+                return;
+            }
+
+            const keys = Array.from(checkboxes).map(cb => cb.dataset.key);
+            fetch('/download_recordings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ keys: keys })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert(data.error);
+                    return;
+                }
+                data.urls.forEach(url => {
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = '';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                });
+            })
+            .catch(error => {
+                console.error('Error downloading recordings:', error);
+                alert('Failed to download recordings. Please try again.');
+            });
+        }
+    </script>
+</body>
+</html> -->
+
+
+
+
+
+
+
+
+
+<!-- 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recordings</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+        body {
+            background-image: url('/static/bg10.jpg');
+            background-size: cover;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+            color: white;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+        .navbar {
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            margin-bottom: 20px;
+        }
+        .navbar a {
+            color: white;
+            text-decoration: none;
+            margin: 0 15px;
+            font-size: 16px;
+        }
+        .navbar a:hover {
+            color: #ffd700;
+        }
+        .tree-container {
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 20px;
+            border-radius: 5px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        ul {
+            list-style: none;
+            padding-left: 20px;
+        }
+        li {
+            margin: 5px 0;
+        }
+        .tree-node {
+            cursor: pointer;
+            user-select: none;
+        }
+        .tree-node::before {
+            content: '▶';
+            display: inline-block;
+            margin-right: 5px;
+        }
+        .tree-node.expanded::before {
+            content: '▼';
+        }
+        .recording-item {
+            display: flex;
+            align-items: center;
+        }
+        .recording-item input[type="checkbox"] {
+            margin-right: 10px;
+        }
+        .recording-item span {
+            margin-right: 15px;
+        }
+        .download-btn {
+            display: block;
+            margin: 20px auto;
+            padding: 10px 20px;
+            background-color: #ffd700;
+            color: black;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .download-btn:hover {
+            background-color: #ffea00;
+        }
+        .flash-messages {
+            margin-bottom: 20px;
+        }
+        .flash-messages li {
+            background-color: rgba(255, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <a href="{{ url_for('index', page=1, view='separate') }}">Back to Dashboard</a>
+        <a href="{{ url_for('logout') }}">Logout</a>
+    </div>
+
+    <h1>Recordings</h1>
+
+    {% with messages = get_flashed_messages() %}
+    {% if messages %}
+    <div class="flash-messages">
+        <ul>
+            {% for message in messages %}
+            <li>{{ message }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    <div class="tree-container">
+        {% if recordings_tree %}
+        <ul>
+            {% for camera, dates in recordings_tree.items() %}
+            <li>
+                <span class="tree-node">{{ camera }}</span>
+                <ul style="display: none;">
+                    {% for date, recordings in dates.items() %}
+                    <li>
+                        <span class="tree-node">{{ date }}</span>
+                        <ul style="display: none;">
+                            {% for recording in recordings %}
+                            <li class="recording-item">
+                                <input type="checkbox" class="recording-checkbox" data-key="{{ recording.key }}">
+                                <span>{{ recording.file_name }}</span>
+                                <span>{{ recording.timestamp }}</span>
+                                <span>{{ recording.size_mb }} MB</span>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </li>
+            {% endfor %}
+        </ul>
+        <button class="download-btn" onclick="downloadSelected()">Download Selected</button>
+        {% else %}
+        <p>No recordings found.</p>
+        {% endif %}
+    </div>
+
+    <script>
+        // Toggle visibility of nested lists
+        document.querySelectorAll('.tree-node').forEach(node => {
+            node.addEventListener('click', () => {
+                const ul = node.parentElement.querySelector('ul');
+                if (ul) {
+                    const isHidden = ul.style.display === 'none';
+                    ul.style.display = isHidden ? 'block' : 'none';
+                    node.classList.toggle('expanded', isHidden);
+                }
+            });
+        });
+
+        // Download selected recordings with a delay to ensure all downloads trigger
+        function downloadSelected() {
+            const checkboxes = document.querySelectorAll('.recording-checkbox:checked');
+            const keys = Array.from(checkboxes).map(cb => cb.dataset.key);
+            if (keys.length === 0) {
+                alert('Please select at least one recording to download.');
+                return;
+            }
+
+            fetch('/download_recordings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ keys })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert(data.error);
+                    return;
+                }
+                data.urls.forEach((url, index) => {
+                    // Extract file name from the corresponding key
+                    const key = keys[index];
+                    const fileName = key.split('/').pop(); // e.g., recording_20250429_111816.mp4
+                    setTimeout(() => {
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = fileName; // Set the file name for download
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                    }, index * 100); // 100ms delay between downloads
+                });
+            })
+            .catch(error => {
+                console.error('Error downloading recordings:', error);
+                alert('An error occurred while downloading recordings.');
+            });
+        }
+    </script>
+</body>
+</html> -->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recordings</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+        body {
+            background-image: url('/static/bg10.jpg');
+            background-size: cover;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+            color: white;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+        .navbar {
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            margin-bottom: 20px;
+        }
+        .navbar a {
+            color: white;
+            text-decoration: none;
+            margin: 0 15px;
+            font-size: 16px;
+        }
+        .navbar a:hover {
+            color: #ffd700;
+        }
+        .tree-container {
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 20px;
+            border-radius: 5px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        ul {
+            list-style: none;
+            padding-left: 20px;
+        }
+        li {
+            margin: 5px 0;
+        }
+        .tree-node {
+            cursor: pointer;
+            user-select: none;
+        }
+        .tree-node::before {
+            content: '▶';
+            display: inline-block;
+            margin-right: 5px;
+        }
+        .tree-node.expanded::before {
+            content: '▼';
+        }
+        .recording-item {
+            display: flex;
+            align-items: center;
+        }
+        .recording-item input[type="checkbox"] {
+            margin-right: 10px;
+        }
+        .recording-item span {
+            margin-right: 15px;
+        }
+        .download-btn {
+            display: block;
+            margin: 20px auto;
+            padding: 10px 20px;
+            background-color: #ffd700;
+            color: black;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .download-btn:hover:not(:disabled) {
+            background-color: #ffea00;
+        }
+        .download-btn:disabled {
+            background-color: #999999;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+        .flash-messages {
+            margin-bottom: 20px;
+        }
+        .flash-messages li {
+            background-color: rgba(255, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <a href="{{ url_for('index', page=1, view='separate') }}">Back to Dashboard</a>
+        <a href="{{ url_for('logout') }}">Logout</a>
+    </div>
+
+    <h1>Recordings</h1>
+
+    {% with messages = get_flashed_messages() %}
+    {% if messages %}
+    <div class="flash-messages">
+        <ul>
+            {% for message in messages %}
+            <li>{{ message }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    <div class="tree-container">
+        {% if recordings_tree %}
+        <ul>
+            {% for camera, dates in recordings_tree.items() %}
+            <li>
+                <span class="tree-node">{{ camera }}</span>
+                <ul style="display: none;">
+                    {% for date, recordings in dates.items() %}
+                    <li>
+                        <span class="tree-node">{{ date }}</span>
+                        <ul style="display: none;">
+                            {% for recording in recordings %}
+                            <li class="recording-item">
+                                <input type="checkbox" class="recording-checkbox" data-key="{{ recording.key }}">
+                                <span>{{ recording.file_name }}</span>
+                                <span>{{ recording.timestamp }}</span>
+                                <span>{{ recording.size_mb }} MB</span>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </li>
+            {% endfor %}
+        </ul>
+        <button class="download-btn" onclick="downloadSelected()">Download Selected</button>
+        {% else %}
+        <p>No recordings found.</p>
+        {% endif %}
+    </div>
+
+    <script>
+        // Toggle visibility of nested lists
+        document.querySelectorAll('.tree-node').forEach(node => {
+            node.addEventListener('click', () => {
+                const ul = node.parentElement.querySelector('ul');
+                if (ul) {
+                    const isHidden = ul.style.display === 'none';
+                    ul.style.display = isHidden ? 'block' : 'none';
+                    node.classList.toggle('expanded', isHidden);
+                }
+            });
+        });
+
+        // Download selected recordings as a single ZIP file
+        function downloadSelected() {
+            const button = document.querySelector('.download-btn');
+            const originalText = button.textContent;
+            button.disabled = true;
+            button.textContent = 'Processing...'; // Optional: Show processing state
+
+            const checkboxes = document.querySelectorAll('.recording-checkbox:checked');
+            const keys = Array.from(checkboxes).map(cb => cb.dataset.key);
+            if (keys.length === 0) {
+                alert('Please select at least one recording to download.');
+                button.disabled = false;
+                button.textContent = originalText;
+                return;
+            }
+
+            fetch('/download_recordings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ keys })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert(data.error);
+                    button.disabled = false;
+                    button.textContent = originalText;
+                    return;
+                }
+                const a = document.createElement('a');
+                a.href = data.url;
+                a.download = data.filename; // e.g., recordings_20250430_123456.zip
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                button.disabled = false;
+                button.textContent = originalText;
+            })
+            .catch(error => {
+                console.error('Error downloading ZIP file:', error);
+                alert('An error occurred while downloading the ZIP file.');
+                button.disabled = false;
+                button.textContent = originalText;
+            });
+        }
+    </script>
+</body>
+</html>
